@@ -8,6 +8,7 @@ import {
 	SCROLL_PAGE_UP,
 	scrollbarDragInput,
 	scrollbarPageInput,
+	WheelLineAccumulator,
 } from "./windowsTerminalMouse";
 
 function buffer(lines: string[], viewportY = 0) {
@@ -50,6 +51,24 @@ describe("Windows terminal mouse adapter", () => {
 		expect(scrollbarDragInput(2, 4, 5, 2)).toBe("\x1b\x05".repeat(5));
 		expect(scrollbarDragInput(4, 2, 5, 2)).toBe("\x1b\x19".repeat(5));
 		expect(scrollbarDragInput(2, 2)).toBeNull();
+	});
+
+	it("maps wheel notches to three-line scroll input", () => {
+		const wheel = new WheelLineAccumulator();
+
+		expect(wheel.input(100, 0, 40)).toBe("\x1b\x05".repeat(3));
+		expect(wheel.input(-100, 0, 40)).toBe("\x1b\x19".repeat(3));
+		expect(wheel.input(-2, 1, 40)).toBe("\x1b\x19".repeat(2));
+		expect(wheel.input(1, 2, 4)).toBe("\x1b\x05".repeat(4));
+	});
+
+	it("accumulates small touchpad deltas and resets on direction change", () => {
+		const wheel = new WheelLineAccumulator();
+
+		expect(wheel.input(20, 0, 40)).toBeNull();
+		expect(wheel.input(20, 0, 40)).toBe("\x1b\x05");
+		expect(wheel.input(-20, 0, 40)).toBeNull();
+		expect(wheel.input(-20, 0, 40)).toBe("\x1b\x19");
 	});
 
 	it("finds a one-half-cell thumb in an old session without mistaking the footer for it", () => {

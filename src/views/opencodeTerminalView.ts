@@ -24,6 +24,7 @@ import {
 	SCROLL_PAGE_UP,
 	scrollbarDragInput,
 	scrollbarPageInput,
+	WheelLineAccumulator,
 } from "../modules/windowsTerminalMouse";
 import { LifecycleQueue } from "../modules/lifecycleQueue";
 import { loadOpenCodeHotkeys, loadOpenCodeManualCopy } from "../modules/openCodeKeymap";
@@ -321,11 +322,13 @@ export class OpencodeTerminalView extends ItemView {
 		const renderDisposable = terminal.onRender(updateScrollbar);
 		this.register(() => renderDisposable.dispose());
 
+		const wheelLines = new WheelLineAccumulator();
 		const handleMessageWheel = (event: WheelEvent) => {
 			if (process.platform !== "win32" || event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
-			terminal.input(event.deltaY < 0 ? SCROLL_PAGE_UP : SCROLL_PAGE_DOWN, true);
+			const input = wheelLines.input(event.deltaY, event.deltaMode, terminal.rows);
+			if (input) terminal.input(input, true);
 		};
 		termContainer.addEventListener("wheel", handleMessageWheel, { capture: true, passive: false });
 		this.register(() => termContainer.removeEventListener("wheel", handleMessageWheel, true));
