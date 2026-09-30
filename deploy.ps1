@@ -1,11 +1,16 @@
 # Build the plugin and install it into an Obsidian vault under its manifest id.
+# Example: .\deploy.ps1 -Repo C:\path\to\obsidian-opencode -Vault C:\path\to\vault
 param(
-	[string]$Vault = "C:\path\to\vault",
+	[Parameter(Mandatory = $true)]
+	[string]$Vault,
+	[string]$Repo = $PSScriptRoot,
 	[switch]$SkipBuild
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
+if (-not (Test-Path (Join-Path $Vault ".obsidian"))) { throw "Not an Obsidian vault: $Vault" }
+if (-not (Test-Path (Join-Path $Repo "manifest.json"))) { throw "Not a plugin repository: $Repo" }
+Set-Location $Repo
 
 if (-not $SkipBuild) {
 	if (-not (Test-Path node_modules)) {
