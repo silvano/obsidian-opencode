@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as net from 'net';
 import { setTimeout as delay } from 'timers/promises';
 import { WebSocket, RawData } from 'ws';
 import { EditorServer } from './editorServer';
@@ -189,6 +190,47 @@ describe('EditorServer', () => {
         });
 
         client.close();
+    });
+
+    it('should listen on the loopback interface only', async () => {
+        server = new EditorServer({ lockDir: tempLockDir, publishLock: false });
+        const port = await server.start('/path/to/vault');
+
+        const connected = new Promise<string | undefined>((resolve) => {
+            const socket = net.connect({ host: '127.0.0.1', port }, () => {
+                resolve(socket.localAddress);
+                socket.destroy();
+            });
+        });
+        expect(await connected).toBe('127.0.0.1');
+
+        const nonLoopback = Object.values(os.networkInterfaces())
+            .flat()
+            .find((entry) => entry && entry.family === 'IPv4' && !entry.internal);
+        if (nonLoopback) {
+            const refused = await new Promise<boolean>((resolve) => {
+                const socket = net.connect({ host: nonLoopback.address, port });
+                socket.once('connect', () => { socket.destroy(); resolve(false); });
+                socket.once('error', () => resolve(true));
+            });
+            expect(refused).toBe(true);
+        }
+    });
+
+    it('should reject connections that send an Origin header', async () => {
+        server = new EditorServer({ lockDir: tempLockDir, publishLock: false });
+        const port = await server.start('/path/to/vault');
+
+        const client = new WebSocket(`ws://127.0.0.1:${port}`, { origin: 'https://example.com' });
+        const statusCode = await new Promise<number | undefined>((resolve) => {
+            client.once('unexpected-response', (_request, response) => resolve(response.statusCode));
+            client.once('open', () => resolve(undefined));
+            client.once('error', () => resolve(undefined));
+        });
+        client.terminate();
+
+        expect(statusCode).toBe(401);
+        expect(server.notifyAtMentioned('path/to/note.md')).toBe(false);
     });
 
     it('should report that at_mentioned was not queued without a connected client', () => {

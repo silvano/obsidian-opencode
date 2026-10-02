@@ -13,6 +13,7 @@ For features, usage, settings, platform support and known issues, see the [upstr
 - **Line-wise mouse wheel scrolling on Windows:** One wheel notch scrolls by lines instead of a full page.
 - **System color mode follows Obsidian:** OpenCode's `system` theme follows Obsidian's light/dark mode, also on Windows where ConPTY swallows the color queries.
 - **Clickable terminal links:** Ctrl+click (Cmd+click on macOS) opens links in the system browser, with a hover hint.
+- **Editor server restricted to localhost:** The WebSocket server that sends dropped files to OpenCode listens on `127.0.0.1` only (upstream listens on all network interfaces) and rejects browser connections, so other machines and web pages can't connect.
 - **Distribution via GitHub Releases and BRAT:** Tag pushes publish releases, gated on the full test suite. The e2e tests derive the plugin id from `manifest.json`.
 
 ## Installation (via BRAT)

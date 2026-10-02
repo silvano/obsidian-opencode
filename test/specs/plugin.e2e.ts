@@ -1541,10 +1541,12 @@ describe("OpenCode plugin in a fresh vault", function () {
 			const view = (window as any).app.workspace.getLeavesOfType("opencode-terminal")[0].view;
 			return {
 				port: view.editorServer.port,
+				address: view.editorServer.wss.address().address,
 				lockFilePath: view.editorServer.lockFilePath,
 			};
 		});
 		expect(serverState.port).toBeGreaterThan(0);
+		expect(serverState.address).toBe("127.0.0.1");
 		expect(serverState.lockFilePath).toBe("");
 	});
 

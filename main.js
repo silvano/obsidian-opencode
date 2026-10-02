@@ -20490,12 +20490,13 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // manifest.json
-var version = "2.2.0";
+var version = "2.3.0";
 
 // src/editorServer.ts
 var fs = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 var os2 = __toESM(require("os"));
+var EDITOR_SERVER_HOST = "127.0.0.1";
 var EditorServer = class {
   constructor(options = {}) {
     this.wss = null;
@@ -20508,7 +20509,11 @@ var EditorServer = class {
   }
   async start(vaultRoot) {
     return new Promise((resolve3, reject) => {
-      this.wss = new import_websocket_server.default({ port: 0 }, () => {
+      this.wss = new import_websocket_server.default({
+        host: EDITOR_SERVER_HOST,
+        port: 0,
+        verifyClient: ({ req }) => req.headers.origin === void 0
+      }, () => {
         const address = this.wss.address();
         if (typeof address === "object" && address !== null) {
           this.port = address.port;

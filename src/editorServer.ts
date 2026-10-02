@@ -3,6 +3,9 @@ import * as manifest from "../manifest.json";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import type { IncomingMessage } from "http";
+
+export const EDITOR_SERVER_HOST = "127.0.0.1";
 
 export interface EditorServerOptions {
 	lockDir?: string;
@@ -24,7 +27,13 @@ export class EditorServer {
 
 	async start(vaultRoot: string): Promise<number> {
 		return new Promise((resolve, reject) => {
-			this.wss = new WebSocketServer({ port: 0 }, () => {
+			// OpenCode connects to ws://127.0.0.1:<port> without an Origin header.
+			// Browsers always send one, so rejecting it keeps web pages out.
+			this.wss = new WebSocketServer({
+				host: EDITOR_SERVER_HOST,
+				port: 0,
+				verifyClient: ({ req }: { req: IncomingMessage }) => req.headers.origin === undefined,
+			}, () => {
 				const address = this.wss!.address();
 				if (typeof address === "object" && address !== null) {
 					this.port = address.port;
