@@ -60,7 +60,16 @@ Any other general community project (MCP, skill, framework...) that connects cod
 
 ## Installation
 
-### From Obsidian Community Plugins (Recommended)
+### Install this fork (via BRAT)
+
+This fork is distributed through GitHub Releases and installed with [BRAT](https://github.com/TfTHacker/obsidian42-brat):
+
+1. In Obsidian, install and enable **BRAT** from **Settings** → **Community plugins** → **Browse**
+2. Run **BRAT: Add a beta plugin for testing** and enter `silvano/obsidian-opencode`
+3. Enable **OpenCode (silvano)** in Community plugins. BRAT keeps it updated with new releases.
+4. If the upstream **OpenCode** plugin is also installed, disable it so only one copy runs
+
+### From Obsidian Community Plugins (upstream)
 
 1. Open Obsidian and go to **Settings** → **Community plugins**
 2. Click **Browse** and search for **OpenCode**

@@ -4,6 +4,7 @@
 	"version": "2.2.0",
 	"minAppVersion": "1.7.2",
 	"description": "Launch OpenCode CLI terminal sessions and browse conversation history without leaving your vault.",
-	"author": "krisspy",
+	"author": "silvano (fork), krisspy (original)",
+	"authorUrl": "https://github.com/silvano/obsidian-opencode",
 	"isDesktopOnly": true
 }
