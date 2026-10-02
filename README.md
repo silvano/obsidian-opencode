@@ -14,7 +14,6 @@ For features, usage, settings, platform support and known issues, see the [upstr
 - **System color mode follows Obsidian:** OpenCode's `system` theme follows Obsidian's light/dark mode, also on Windows where ConPTY swallows the color queries.
 - **Clickable terminal links:** Ctrl+click (Cmd+click on macOS) opens links in the system browser, with a hover hint.
 - **Distribution via GitHub Releases and BRAT:** Tag pushes publish releases, gated on the full test suite. The e2e tests derive the plugin id from `manifest.json`.
-- **`deploy.ps1`:** Builds and installs the plugin into a local vault.
 
 ## Installation (via BRAT)
 
@@ -28,12 +27,6 @@ This fork is distributed through GitHub Releases and installed with [BRAT](https
 ## Development
 
 Development requires Node.js 22.12 or newer. See the upstream README and [Testing in Obsidian](docs/testing-obsidian.md) for development and test commands.
-
-To build and install the plugin into a local vault:
-
-```powershell
-.\deploy.ps1 -Vault <vault path>
-```
 
 ### Releasing
 
@@ -56,4 +49,4 @@ Use *merge*, not *rebase*: rebasing overwrites the published release commits and
 
 ## License
 
-MIT License, as upstream.
+MIT License
