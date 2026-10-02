@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isOpenCodeThemePicker, terminalColorQueryResponse, ThemePreviewInputBatcher } from "./themePreview";
+import {
+	isOpenCodeThemePicker,
+	terminalColorQueryResponse,
+	ThemePreviewInputBatcher,
+	themeModeReport,
+	win32InputSequence,
+} from "./themePreview";
 
 afterEach(() => vi.useRealTimers());
 
@@ -25,6 +31,15 @@ describe("theme preview integration", () => {
 		expect(terminalColorQueryResponse(11, "#abc"))
 			.toBe("\x1b]11;rgb:aaaa/bbbb/cccc\x1b\\");
 		expect(terminalColorQueryResponse(11, "transparent")).toBeNull();
+	});
+
+	it("reports host theme changes as DEC mode 2031 notifications", () => {
+		expect(themeModeReport(true)).toBe("\x1b[?997;1n");
+		expect(themeModeReport(false)).toBe("\x1b[?997;2n");
+	});
+
+	it("encodes text as win32-input-mode key events for ConPTY", () => {
+		expect(win32InputSequence("\x1b]")).toBe("\x1b[0;0;27;1;0;1_\x1b[0;0;93;1;0;1_");
 	});
 
 	it("recognizes the OpenCode theme preview dialog", () => {
