@@ -14,6 +14,8 @@ export const SCROLL_PAGE_DOWN = "\x1b[6~";
 const SCROLL_LINE_UP = "\x1b\x19";
 const SCROLL_LINE_DOWN = "\x1b\x05";
 const SCROLLBAR_COLUMN_TOLERANCE = 3;
+// Chromium reports 100px per wheel notch on Windows; map that to three lines like other applications.
+const WHEEL_PIXELS_PER_LINE = 100 / 3;
 
 export interface OpenCodeScrollbarThumb {
 	column: number;
@@ -82,6 +84,22 @@ export function scrollbarDragInput(
 	if (currentRow < previousRow) return SCROLL_LINE_UP.repeat(lineCount);
 	if (currentRow > previousRow) return SCROLL_LINE_DOWN.repeat(lineCount);
 	return null;
+}
+
+export class WheelLineAccumulator {
+	private remainder = 0;
+
+	input(deltaY: number, deltaMode: number, pageRows: number): string | null {
+		const lines = deltaMode === 1 ? deltaY
+			: deltaMode === 2 ? deltaY * pageRows
+				: deltaY / WHEEL_PIXELS_PER_LINE;
+		if (Math.sign(lines) !== Math.sign(this.remainder)) this.remainder = 0;
+		this.remainder += lines;
+		const lineCount = Math.trunc(this.remainder);
+		if (lineCount === 0) return null;
+		this.remainder -= lineCount;
+		return (lineCount < 0 ? SCROLL_LINE_UP : SCROLL_LINE_DOWN).repeat(Math.abs(lineCount));
+	}
 }
 
 export function isOpenCodePicker(buffer: TerminalBuffer): boolean {

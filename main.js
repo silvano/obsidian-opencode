@@ -21416,6 +21416,7 @@ var SCROLL_PAGE_DOWN = "\x1B[6~";
 var SCROLL_LINE_UP = "\x1B";
 var SCROLL_LINE_DOWN = "\x1B";
 var SCROLLBAR_COLUMN_TOLERANCE = 3;
+var WHEEL_PIXELS_PER_LINE = 100 / 3;
 function findOpenCodeScrollbarThumb(buffer, visibleRows) {
   var _a;
   const lines = Array.from(
@@ -21468,6 +21469,20 @@ function scrollbarDragInput(previousRow, currentRow, trackRows = 1, thumbRows = 
   if (currentRow > previousRow) return SCROLL_LINE_DOWN.repeat(lineCount);
   return null;
 }
+var WheelLineAccumulator = class {
+  constructor() {
+    this.remainder = 0;
+  }
+  input(deltaY, deltaMode, pageRows) {
+    const lines = deltaMode === 1 ? deltaY : deltaMode === 2 ? deltaY * pageRows : deltaY / WHEEL_PIXELS_PER_LINE;
+    if (Math.sign(lines) !== Math.sign(this.remainder)) this.remainder = 0;
+    this.remainder += lines;
+    const lineCount = Math.trunc(this.remainder);
+    if (lineCount === 0) return null;
+    this.remainder -= lineCount;
+    return (lineCount < 0 ? SCROLL_LINE_UP : SCROLL_LINE_DOWN).repeat(Math.abs(lineCount));
+  }
+};
 function isOpenCodePicker(buffer) {
   var _a, _b;
   for (let index = 0; index < buffer.length; index++) {
@@ -22292,11 +22307,13 @@ var OpencodeTerminalView = class extends import_obsidian4.ItemView {
     };
     const renderDisposable = terminal.onRender(updateScrollbar);
     this.register(() => renderDisposable.dispose());
+    const wheelLines = new WheelLineAccumulator();
     const handleMessageWheel = (event) => {
       if (process.platform !== "win32" || event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      terminal.input(event.deltaY < 0 ? SCROLL_PAGE_UP : SCROLL_PAGE_DOWN, true);
+      const input = wheelLines.input(event.deltaY, event.deltaMode, terminal.rows);
+      if (input) terminal.input(input, true);
     };
     termContainer.addEventListener("wheel", handleMessageWheel, { capture: true, passive: false });
     this.register(() => termContainer.removeEventListener("wheel", handleMessageWheel, true));

@@ -1,6 +1,6 @@
 {
-	"id": "opencode",
-	"name": "OpenCode",
+	"id": "opencode-silvano",
+	"name": "OpenCode (silvano)",
 	"version": "2.2.0",
 	"minAppVersion": "1.7.2",
 	"description": "Launch OpenCode CLI terminal sessions and browse conversation history without leaving your vault.",
