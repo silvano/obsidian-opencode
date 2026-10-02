@@ -1,66 +1,22 @@
-# Obsidian OpenCode
+# OpenCode (silvano)
 
-A plugin that embeds the OpenCode CLI directly into Obsidian. Browse conversation history and resume work without leaving your vault.
+This is a fork of [Obsidian OpenCode](https://github.com/kriss-spy/obsidian-opencode) by krisspy, which embeds the OpenCode CLI in Obsidian. All credit for the plugin goes to the original work.
 
-## Demo
+- Obsidian plugin page: [OpenCode](https://community.obsidian.md/plugins/opencode)
+- Upstream repository: [kriss-spy/obsidian-opencode](https://github.com/kriss-spy/obsidian-opencode)
 
-Work with vault notes and OpenCode side by side:
+For features, usage, settings, platform support and known issues, see the [upstream README](https://github.com/kriss-spy/obsidian-opencode#readme).
 
-![A waterfall-model note open beside an OpenCode conversation in Obsidian](docs/assets/obsidian-opencode-side-by-side.png)
+## Changes in this fork
 
-Use OpenCode 2's multi-session interface in a full Obsidian editor tab:
+- **Separate plugin id:** Installs as `opencode-silvano` ("OpenCode (silvano)"), so it doesn't collide with the upstream plugin.
+- **Line-wise mouse wheel scrolling on Windows:** One wheel notch scrolls by lines instead of a full page.
+- **System color mode follows Obsidian:** OpenCode's `system` theme follows Obsidian's light/dark mode, also on Windows where ConPTY swallows the color queries.
+- **Clickable terminal links:** Ctrl+click (Cmd+click on macOS) opens links in the system browser, with a hover hint.
+- **Distribution via GitHub Releases and BRAT:** Tag pushes publish releases, gated on the full test suite. The e2e tests derive the plugin id from `manifest.json`.
+- **`deploy.ps1`:** Builds and installs the plugin into a local vault.
 
-![OpenCode 2 showing vertical session tabs inside Obsidian](docs/assets/obsidian-opencode-v2-sessions.png)
-
-## Features
-
-- **Native OpenCode Execution:** Runs the OpenCode CLI directly inside Obsidian using an integrated terminal, ensuring smooth performance for long sessions.
-- **Vault-Centric Workflow:** Automatically spawns the agent in your vault's root, ensuring it has immediate access to your notes and project files.
-- **Drag and Drop Context:** Drop notes from Obsidian's file explorer directly into the terminal to insert them as `@path/to/file.md#1` mentions for OpenCode.
-- **Session Manager:**
-  - **History Browser:** View a list of all your past OpenCode sessions with timestamps.
-  - **Conversation Preview:** Inspect message history, token usage and model details.
-  - **One-Click Restore:** Instantly resume a previous session in the embedded terminal.
-  - **Export to Markdown:** Save entire conversation threads as formatted notes in your vault for documentation or review.
-
-## Platform Support
-
-- **Linux**: stable on my daily driver, not tested on all distros.
-- **WSL2/X410**: Supported with the Linux Obsidian app and formal OpenCode V2. Text copy/paste, OSC 52, Windows clipboard image paste, and copying rendered terminal images use a Unicode-safe Windows PowerShell bridge. WSLg is outside this support contract.
-- **Windows**: Beta support on Windows 10 version 1809 and later through ConPTY. Node.js must be available on `PATH` for the isolated PTY helper.
-- **macOS**: Experimental.
-
-## Known Issues
-
-- **Empty external-editor prompts are not applied:** In both OpenCode 1 and OpenCode V2, opening the prompt in an external editor, deleting all content, and saving leaves the previous prompt in place. This also reproduces when OpenCode runs outside Obsidian, so it must be fixed upstream.
-
-- **OpenCode V2 can time out while pasting large images:** This reproduces in both the embedded terminal and standalone OpenCode V2, so it is not caused by the plugin. A V2 preview build configured clipboard reads with a 1-second timeout and an 8 MiB read limit; a 54.5 MB, 2720 x 18447 PNG reports `Clipboard read timed out`. Its separate local-file attachment limit is 20 MiB, so attaching that same file by path is also unsupported. OpenCode 1.4.6 on Linux reads image data through `wl-paste` without those explicit clipboard limits, so the large image may work there, but that comparison has not yet been verified manually.
-
-- **large session preview:** While the buffer size for exporting sessions has been increased (up to 100MB), exceptionally large or deeply complex OpenCode sessions with massive token counts may still occasionally fail to preview or load properly.
-
-- **not tested on all Linux distros:** While the plugin should work on major distros, it's only tested on manjaro, ubuntu, and fedora.
-
-- **Experimental Windows pty:** It's usable but far from linux and macos experience.
-
-- **shortcuts conflicts:**: Default opencode shortcuts like `Ctrl+P` could conflict with obsidian shortcuts. A solution for now is to always use leader key for opencode shortcuts.
-
-## Integrations
-
-### LaTeX render
-
-OpenCode CLI doesn't support LaTeX render natively. I made this opencode plugin for myself: [opencode-latex](https://github.com/kriss-spy/opencode-latex)
-
-<img width="1317" height="1128" alt="Screenshot_20260919_172121" src="https://github.com/user-attachments/assets/13c41062-4eb3-4702-9054-2eaf4deec2b8" />
-
-### Obsidian
-
-Personally, i use kepano's [obsidian skills](https://github.com/kepano/obsidian-skills) and some of my [obsidian skills](https://github.com/kriss-spy/obsidian-skills).
-
-Any other general community project (MCP, skill, framework...) that connects coding agents with obsidian should work out of the box, as long as it doesn't specify the main interface.
-
-## Installation
-
-### Install this fork (via BRAT)
+## Installation (via BRAT)
 
 This fork is distributed through GitHub Releases and installed with [BRAT](https://github.com/TfTHacker/obsidian42-brat):
 
@@ -69,51 +25,35 @@ This fork is distributed through GitHub Releases and installed with [BRAT](https
 3. Enable **OpenCode (silvano)** in Community plugins. BRAT keeps it updated with new releases.
 4. If the upstream **OpenCode** plugin is also installed, disable it so only one copy runs
 
-### From Obsidian Community Plugins (upstream)
-
-1. Open Obsidian and go to **Settings** → **Community plugins**
-2. Click **Browse** and search for **OpenCode**
-3. Click **Install**, then **Enable**
-
-### Manual Installation
-
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/kriss-spy/obsidian-opencode/releases/latest)
-2. Create a folder named `opencode` in your vault's `.obsidian/plugins/` directory
-3. Copy the downloaded files into that folder
-4. Reload Obsidian and enable the **OpenCode** plugin in Community Plugins settings
-
-## Usage
-
-- **Terminal:** Use the command palette (`Ctrl/Cmd + P`) and select **"OpenCode: Open Terminal"** to launch the CLI.
-- **Sessions View:** Use the command palette to select **"OpenCode: Open conversations"** to browse, restore, or export past conversations, or start a new session from the panel header.
-- **Close terminal:** Run **"OpenCode: Close terminal"** or press `Ctrl+Shift+W`. The shortcut can be changed in Obsidian's Hotkeys settings.
-- **Settings:** Leave the OpenCode path empty to auto-detect a compatible OpenCode installation, or configure `opencode`, `opencode2`, a `~/…` path, or a full executable path. Bare executable names are resolved from `PATH`, common user-local directories, and NVM installations: nvm-sh version directories on Unix, or the active `NVM_SYMLINK` and installed versions under `NVM_HOME` on Windows. Shell aliases are not executable paths and cannot be launched directly. Default CLI arguments, per-vault environment variables, and terminal styling preferences are available in the Obsidian settings under the "OpenCode" tab.
-- **WSL2 clipboard:** With Linux Obsidian displayed through X410, selecting text uses OpenCode's default copy-on-select behavior, and the plugin forwards its OSC 52 copy to Windows. For manual copy, set `terminal.copy` to `"manual"` in OpenCode V2's TUI config (`cli.json` in 2.0.1 or `tui.json` in newer builds); the legacy `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT=1` environment flag is also recognized for older OpenCode releases. In manual mode, `Ctrl+C` copies an active terminal selection through the Windows bridge; without a selection it remains an OpenCode interrupt. `Ctrl+V` prefers a Windows clipboard image and otherwise pastes Unicode text. Right-click a rendered terminal image to copy it to the Windows clipboard. PowerShell interop errors appear as Obsidian notices.
-
 ## Development
 
-Development requires Node.js 22.12 or newer.
+Development requires Node.js 22.12 or newer. See the upstream README and [Testing in Obsidian](docs/testing-obsidian.md) for development and test commands.
 
-To develop the plugin, you can run the development script which automatically rebuilds the plugin when files change:
+To build and install the plugin into a local vault:
 
-```bash
-npm run dev
+```powershell
+.\deploy.ps1 -Vault <vault path>
 ```
 
-Unit tests run with `npm test`. To create a fresh isolated vault and test the built plugin inside a sandboxed Obsidian instance, run:
+### Releasing
 
 ```bash
-npm run test:obsidian
+npm version minor   # or patch
+git push --follow-tags
 ```
 
-Use `npm run test:obsidian:smoke` for the smaller baseline suite. Windows contributors can also run `npm run test:obsidian:windows-ui` to exercise the installed OpenCode CLI and native terminal interactions.
+The tag push runs the tests, then publishes a GitHub Release that BRAT picks up.
 
-See [Testing in Obsidian](docs/testing-obsidian.md) for setup, coverage, evidence, and limitations.
+### Syncing this fork with upstream
 
-## Acknowledgements
+```bash
+git fetch upstream
+git merge upstream/main
+git push
+```
 
-- **Terminal integration approach** inspired by [polyipseity/obsidian-terminal](https://github.com/polyipseity/obsidian-terminal) — the Python PTY proxy with `pty.fork()` and 4-pipe stdio for resize control (FD 3).
+Use *merge*, not *rebase*: rebasing overwrites the published release commits and tags of the fork. If the merge conflicts on the `version` fields in `package.json`, `manifest.json` or `versions.json`, keep the fork's values and the `opencode-silvano` id, then `git add` the files and `git commit`. The next `npm version` sets the correct version.
 
 ## License
 
-MIT License
+MIT License, as upstream.
