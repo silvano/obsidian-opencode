@@ -21508,6 +21508,27 @@ var LifecycleQueue = class {
   }
 };
 
+// src/modules/terminalLinks.ts
+function isLinkActivation(event, platform) {
+  return platform === "darwin" ? event.metaKey : event.ctrlKey;
+}
+function isOpenableUrl(uri) {
+  try {
+    const { protocol } = new URL(uri);
+    return protocol === "http:" || protocol === "https:";
+  } catch (e) {
+    return false;
+  }
+}
+function linkHint(platform) {
+  return `${platform === "darwin" ? "Cmd" : "Ctrl"}+click to open link`;
+}
+function createTerminalLinkHandler(open, platform) {
+  return (event, uri) => {
+    if (isLinkActivation(event, platform) && isOpenableUrl(uri)) open(uri);
+  };
+}
+
 // src/utils/opencode.ts
 var import_obsidian3 = require("obsidian");
 var import_child_process = require("child_process");
@@ -22129,6 +22150,9 @@ var OpencodeTerminalView = class extends import_obsidian4.ItemView {
     const terminalBg = initialBg && initialBg !== "transparent" && initialBg !== "rgba(0, 0, 0, 0)" ? initialBg : fallbackBg;
     const terminalFg = initialFg || fallbackFg;
     termContainer.style.backgroundColor = terminalBg;
+    const openLink = createTerminalLinkHandler((uri) => window.open(uri, "_blank"), process.platform);
+    const showLinkHint = () => termContainer.setAttribute("title", linkHint(process.platform));
+    const hideLinkHint = () => termContainer.removeAttribute("title");
     const terminal = new import_xterm.Terminal({
       fontSize: this.plugin.settings.terminalFontSize,
       fontFamily: this.plugin.settings.terminalFontFamily,
@@ -22156,11 +22180,12 @@ var OpencodeTerminalView = class extends import_obsidian4.ItemView {
         getCellSizePixels: true
       },
       windowsPty: process.platform === "win32" ? { backend: "conpty", buildNumber: Number.parseInt((0, import_node_os2.release)().split(".")[2], 10) } : void 0,
-      allowProposedApi: true
+      allowProposedApi: true,
+      linkHandler: { activate: openLink, hover: showLinkHint, leave: hideLinkHint }
     });
     const fitAddon = new import_addon_fit.FitAddon();
     terminal.loadAddon(fitAddon);
-    terminal.loadAddon(new import_addon_web_links.WebLinksAddon());
+    terminal.loadAddon(new import_addon_web_links.WebLinksAddon(openLink, { hover: showLinkHint, leave: hideLinkHint }));
     const imageAddon = new import_addon_image.ImageAddon({
       enableSizeReports: false,
       iipSupport: false

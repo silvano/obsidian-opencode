@@ -27,6 +27,7 @@ import {
 	WheelLineAccumulator,
 } from "../modules/windowsTerminalMouse";
 import { LifecycleQueue } from "../modules/lifecycleQueue";
+import { createTerminalLinkHandler, linkHint } from "../modules/terminalLinks";
 import { loadOpenCodeHotkeys, loadOpenCodeManualCopy } from "../modules/openCodeKeymap";
 import { mergeEnvironmentVariables } from "../utils/environment";
 import { OpencodeClient, OpencodeError } from "../utils/opencode";
@@ -114,6 +115,12 @@ export class OpencodeTerminalView extends ItemView {
 
 		termContainer.style.backgroundColor = terminalBg;
 
+		// xterm's default opener uses a blank window.open(), which Obsidian blocks.
+		// Passing the URL lets Obsidian hand it to the system browser.
+		const openLink = createTerminalLinkHandler((uri) => window.open(uri, "_blank"), process.platform);
+		const showLinkHint = () => termContainer.setAttribute("title", linkHint(process.platform));
+		const hideLinkHint = () => termContainer.removeAttribute("title");
+
 		const terminal = new Terminal({
 			fontSize: this.plugin.settings.terminalFontSize,
 			fontFamily: this.plugin.settings.terminalFontFamily,
@@ -144,11 +151,12 @@ export class OpencodeTerminalView extends ItemView {
 				? { backend: "conpty", buildNumber: Number.parseInt(release().split(".")[2], 10) }
 				: undefined,
 			allowProposedApi: true,
+			linkHandler: { activate: openLink, hover: showLinkHint, leave: hideLinkHint },
 		});
 
 		const fitAddon = new FitAddon();
 		terminal.loadAddon(fitAddon);
-		terminal.loadAddon(new WebLinksAddon());
+		terminal.loadAddon(new WebLinksAddon(openLink, { hover: showLinkHint, leave: hideLinkHint }));
 		const imageAddon = new ImageAddon({
 			enableSizeReports: false,
 			iipSupport: false,
