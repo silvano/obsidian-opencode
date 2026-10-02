@@ -34,6 +34,8 @@ import {
 	isOpenCodeThemePicker,
 	terminalColorQueryResponse,
 	ThemePreviewInputBatcher,
+	themeModeReport,
+	win32InputSequence,
 } from "../modules/themePreview";
 
 interface VaultWithConfig {
@@ -154,24 +156,43 @@ export class OpencodeTerminalView extends ItemView {
 		this.imageAddon = imageAddon;
 
 		terminal.open(termContainer);
+		const hostIsDark = () => this.containerEl.ownerDocument.body.classList.contains("theme-dark") ||
+			((this.app.vault as unknown as VaultWithConfig).getConfig?.("theme") === "obsidian");
+		const hostColorResponse = (osc: 10 | 11) => {
+			const property = osc === 10 ? "--text-normal" : "--background-primary";
+			const value = getComputedStyle(this.containerEl.ownerDocument.body).getPropertyValue(property).trim();
+			const dark = hostIsDark();
+			const fallback = osc === 10
+				? (dark ? "#d4d4d4" : "#333333")
+				: (dark ? "#1e1e1e" : "#ffffff");
+			return terminalColorQueryResponse(osc, value) ?? terminalColorQueryResponse(osc, fallback) ?? "";
+		};
 		// OpenCode changes xterm's OSC colors while previewing. Its `system` theme
 		// must still query Obsidian's host palette, not the preceding preview.
-		for (const [osc, property] of [[10, "--text-normal"], [11, "--background-primary"]] as const) {
+		for (const osc of [10, 11] as const) {
 			const handler = terminal.parser.registerOscHandler(osc, (data) => {
 				if (data !== "?") return false;
-				const body = this.containerEl.ownerDocument.body;
-				const dark = body.classList.contains("theme-dark") ||
-					((this.app.vault as unknown as VaultWithConfig).getConfig?.("theme") === "obsidian");
-				const value = getComputedStyle(body).getPropertyValue(property).trim();
-				const fallback = osc === 10
-					? (dark ? "#d4d4d4" : "#333333")
-					: (dark ? "#1e1e1e" : "#ffffff");
-				const response = terminalColorQueryResponse(osc, value) ?? terminalColorQueryResponse(osc, fallback);
+				const response = hostColorResponse(osc);
 				if (response) terminal.input(response, false);
 				return true;
 			});
 			this.register(() => handler.dispose());
 		}
+		// ConPTY swallows OSC 10/11 queries, so OpenCode's `system` color mode
+		// never hears from xterm on Windows. Push a DEC mode 2031 report followed
+		// by the host colors; OpenTUI re-queries on the report and accepts the
+		// replies that follow it. ConPTY also drops plain OSC input, so the
+		// replies go through as win32-input-mode key events there.
+		const reportHostTheme = () => {
+			const colors = hostColorResponse(10) + hostColorResponse(11);
+			this.ptySession.writeStdin(themeModeReport(hostIsDark()) +
+				(process.platform === "win32" ? win32InputSequence(colors) : colors));
+		};
+		const themeModeHandler = terminal.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
+			if (params.some((param) => param === 2031)) window.setTimeout(reportHostTheme, 0);
+			return false;
+		});
+		this.register(() => themeModeHandler.dispose());
 		let scrollbarRail: HTMLElement | null = null;
 		let scrollbarThumb: HTMLElement | null = null;
 		if (process.platform === "win32") {
@@ -202,8 +223,8 @@ export class OpencodeTerminalView extends ItemView {
 
 		let themeInitialized = false;
 		// Dynamic theme update to match Obsidian colors precisely once DOM is mounted
-		const updateTheme = () => {
-			if (!terminal || themeInitialized) return;
+		const updateTheme = (force = false) => {
+			if (!terminal || (themeInitialized && !force)) return;
 			const docBody = this.containerEl.ownerDocument.body;
 			const computedStyle = getComputedStyle(docBody);
 			const currentIsDark = docBody.classList.contains("theme-dark") ||
@@ -277,6 +298,15 @@ export class OpencodeTerminalView extends ItemView {
 		this.registerEvent(
 			this.app.workspace.on("layout-change", () => {
 				doFit();
+			})
+		);
+
+		// OpenCode's `system` color mode only re-queries OSC 10/11 after a DEC
+		// mode 2031 report, which xterm.js never sends on its own.
+		this.registerEvent(
+			this.app.workspace.on("css-change", () => {
+				updateTheme(true);
+				reportHostTheme();
 			})
 		);
 

@@ -22047,6 +22047,12 @@ function oscChannels(color) {
   const channels = rgb.slice(1, 4).map(Number);
   return channels.every((channel) => channel >= 0 && channel <= 255) ? channels : null;
 }
+function themeModeReport(dark) {
+  return dark ? "\x1B[?997;1n" : "\x1B[?997;2n";
+}
+function win32InputSequence(text) {
+  return [...text].map((char) => `\x1B[0;0;${char.charCodeAt(0)};1;0;1_`).join("");
+}
 function terminalColorQueryResponse(osc, color) {
   const channels = oscChannels(color);
   if (!channels) return null;
@@ -22147,20 +22153,36 @@ var OpencodeTerminalView = class extends import_obsidian4.ItemView {
     terminal.loadAddon(imageAddon);
     this.imageAddon = imageAddon;
     terminal.open(termContainer);
-    for (const [osc, property] of [[10, "--text-normal"], [11, "--background-primary"]]) {
+    const hostIsDark = () => {
+      var _a2, _b2;
+      return this.containerEl.ownerDocument.body.classList.contains("theme-dark") || ((_b2 = (_a2 = this.app.vault).getConfig) == null ? void 0 : _b2.call(_a2, "theme")) === "obsidian";
+    };
+    const hostColorResponse = (osc) => {
+      var _a2, _b2;
+      const property = osc === 10 ? "--text-normal" : "--background-primary";
+      const value = getComputedStyle(this.containerEl.ownerDocument.body).getPropertyValue(property).trim();
+      const dark = hostIsDark();
+      const fallback = osc === 10 ? dark ? "#d4d4d4" : "#333333" : dark ? "#1e1e1e" : "#ffffff";
+      return (_b2 = (_a2 = terminalColorQueryResponse(osc, value)) != null ? _a2 : terminalColorQueryResponse(osc, fallback)) != null ? _b2 : "";
+    };
+    for (const osc of [10, 11]) {
       const handler = terminal.parser.registerOscHandler(osc, (data) => {
-        var _a2, _b2, _c;
         if (data !== "?") return false;
-        const body = this.containerEl.ownerDocument.body;
-        const dark = body.classList.contains("theme-dark") || ((_b2 = (_a2 = this.app.vault).getConfig) == null ? void 0 : _b2.call(_a2, "theme")) === "obsidian";
-        const value = getComputedStyle(body).getPropertyValue(property).trim();
-        const fallback = osc === 10 ? dark ? "#d4d4d4" : "#333333" : dark ? "#1e1e1e" : "#ffffff";
-        const response = (_c = terminalColorQueryResponse(osc, value)) != null ? _c : terminalColorQueryResponse(osc, fallback);
+        const response = hostColorResponse(osc);
         if (response) terminal.input(response, false);
         return true;
       });
       this.register(() => handler.dispose());
     }
+    const reportHostTheme = () => {
+      const colors = hostColorResponse(10) + hostColorResponse(11);
+      this.ptySession.writeStdin(themeModeReport(hostIsDark()) + (process.platform === "win32" ? win32InputSequence(colors) : colors));
+    };
+    const themeModeHandler = terminal.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
+      if (params.some((param) => param === 2031)) window.setTimeout(reportHostTheme, 0);
+      return false;
+    });
+    this.register(() => themeModeHandler.dispose());
     let scrollbarRail = null;
     let scrollbarThumb = null;
     if (process.platform === "win32") {
@@ -22189,9 +22211,9 @@ var OpencodeTerminalView = class extends import_obsidian4.ItemView {
     this.terminal = terminal;
     this.fitAddon = fitAddon;
     let themeInitialized = false;
-    const updateTheme = () => {
+    const updateTheme = (force = false) => {
       var _a2, _b2;
-      if (!terminal || themeInitialized) return;
+      if (!terminal || themeInitialized && !force) return;
       const docBody = this.containerEl.ownerDocument.body;
       const computedStyle2 = getComputedStyle(docBody);
       const currentIsDark = docBody.classList.contains("theme-dark") || ((_b2 = (_a2 = this.app.vault).getConfig) == null ? void 0 : _b2.call(_a2, "theme")) === "obsidian";
@@ -22251,6 +22273,12 @@ var OpencodeTerminalView = class extends import_obsidian4.ItemView {
     this.registerEvent(
       this.app.workspace.on("layout-change", () => {
         doFit();
+      })
+    );
+    this.registerEvent(
+      this.app.workspace.on("css-change", () => {
+        updateTheme(true);
+        reportHostTheme();
       })
     );
     window.addEventListener("resize", doFit);

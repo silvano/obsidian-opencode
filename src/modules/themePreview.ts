@@ -80,6 +80,18 @@ function oscChannels(color: string): [number, number, number] | null {
 	return channels.every((channel) => channel >= 0 && channel <= 255) ? channels : null;
 }
 
+// DEC mode 2031 theme-change report. OpenTUI only uses it as a trigger to
+// re-query OSC 10/11, so the payload just has to be well-formed.
+export function themeModeReport(dark: boolean): string {
+	return dark ? "\x1b[?997;1n" : "\x1b[?997;2n";
+}
+
+// ConPTY drops OSC sequences written as plain VT input. Sent as win32-input-mode
+// key events, each character reaches the child unparsed.
+export function win32InputSequence(text: string): string {
+	return [...text].map((char) => `\x1b[0;0;${char.charCodeAt(0)};1;0;1_`).join("");
+}
+
 export function terminalColorQueryResponse(osc: 10 | 11, color: string): string | null {
 	const channels = oscChannels(color);
 	if (!channels) return null;
