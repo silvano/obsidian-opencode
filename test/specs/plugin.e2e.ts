@@ -12,6 +12,8 @@ const artifactsDir = path.resolve("test-results/obsidian");
 const opencodeStub = path.resolve(`test/fixtures/opencode-stub${process.platform === "win32" ? ".cmd" : ""}`);
 const opencodeCmdStub = path.resolve("test/fixtures/opencode-cmd-stub.cmd");
 const opentuiImageStub = path.resolve("test/fixtures/opentui-image-stub");
+// Forks may rename the plugin id; plugin lookups and command ids derive from it.
+const pluginId: string = JSON.parse(readFileSync(path.resolve("manifest.json"), "utf8")).id;
 
 function nextMessage(socket: WebSocket): Promise<string> {
 	return new Promise((resolve, reject) => {
@@ -70,11 +72,12 @@ async function waitForTerminalText(text: string): Promise<void> {
 describe("OpenCode plugin in a fresh vault", function () {
 	before(async function () {
 		mkdirSync(artifactsDir, { recursive: true });
-		const loaded = await browser.execute(() => Boolean((window as any).app.plugins.plugins.opencode));
+		await browser.execute((id: string) => { (window as any).opencodeTestPluginId = id; }, pluginId);
+		const loaded = await browser.execute(() => Boolean((window as any).app.plugins.plugins[(window as any).opencodeTestPluginId]));
 		expect(loaded).toBe(true);
 
 		await browser.execute(async (stubPath: string) => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = stubPath;
 			plugin.settings.defaultWorkingDirectory = "";
 			await plugin.saveSettings();
@@ -82,23 +85,23 @@ describe("OpenCode plugin in a fresh vault", function () {
 	});
 
 	it("[smoke] registers its commands", async function () {
-		const commandIds = await browser.execute(() => (
+		const commandIds = await browser.execute((prefix: string) => (
 			(window as any).app.commands.listCommands()
 				.map((command: { id: string }) => command.id)
-				.filter((id: string) => id.startsWith("opencode:"))
-		));
+				.filter((id: string) => id.startsWith(`${prefix}:`))
+		), pluginId);
 
 		expect(commandIds).toEqual(expect.arrayContaining([
-			"opencode:open-terminal",
-			"opencode:open-conversations",
-			"opencode:new-session",
+			`${pluginId}:open-terminal`,
+			`${pluginId}:open-conversations`,
+			`${pluginId}:new-session`,
 		]));
 	});
 
 	it("[smoke] closes the terminal with the Close terminal command", async function () {
-		await browser.executeObsidianCommand("opencode:open-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		try {
-			await browser.executeObsidianCommand("opencode:close-terminal");
+			await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 			await browser.waitUntil(() => browser.execute(() => (
 				(window as any).app.workspace.getLeavesOfType("opencode-terminal").length === 0
 			)), { timeoutMsg: "Close terminal command did not close the OpenCode terminal" });
@@ -115,7 +118,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		await expect(status).toExist();
 
 		await browser.execute(() => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.statusSource = null;
 			plugin.statusTracker.updateSessions([]);
 			plugin.renderStatus(plugin.statusTracker.status);
@@ -124,7 +127,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		await expect(status).toHaveAttribute("aria-label", "OpenCode is idle");
 
 		await browser.execute(() => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.statusTracker.updateSessions([{
 				id: "fixture-status-session",
 				directory: plugin.vaultRoot,
@@ -137,7 +140,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		await expect(status).toHaveAttribute("title", "OpenCode is working");
 
 		await browser.execute(() => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			const activeFile = `${plugin.vaultRoot.replace(/[\\/]+$/, "")}/Smoke.md`;
 			plugin.statusTracker.updateActiveFile(activeFile);
 			plugin.statusTracker.updateSessions([{
@@ -156,11 +159,11 @@ describe("OpenCode plugin in a fresh vault", function () {
 		await browser.waitUntil(() => browser.execute(() => (
 			(window as any).app.workspace.getLeavesOfType("opencode-terminal").length === 1
 		)), { timeoutMsg: "Status indicator did not open the OpenCode terminal" });
-		await browser.executeObsidianCommand("opencode:close-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 	});
 
 	it("[smoke] opens the conversations view", async function () {
-		await browser.executeObsidianCommand("opencode:open-conversations");
+		await browser.executeObsidianCommand(`${pluginId}:open-conversations`);
 
 		const view = browser.$(".opencode-conversation-container");
 		await expect(view).toExist();
@@ -202,16 +205,16 @@ describe("OpenCode plugin in a fresh vault", function () {
 	});
 
 	it("[issue #36] lists OpenCode v2 sessions through its API", async function () {
-		await browser.executeObsidianCommand("opencode:open-conversations");
+		await browser.executeObsidianCommand(`${pluginId}:open-conversations`);
 		const previousEnvironmentVariables = await browser.execute(() => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			return { ...plugin.settings.environmentVariables };
 		});
 
 		try {
 			await browser.execute(async () => {
 				const app = (window as any).app;
-				const plugin = app.plugins.plugins.opencode;
+				const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.environmentVariables = {
 					...plugin.settings.environmentVariables,
 					OBSIDIAN_OPENCODE_V2: "1",
@@ -226,7 +229,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		} finally {
 			await browser.execute(async (serializedEnvironmentVariables: string) => {
 				const app = (window as any).app;
-				const plugin = app.plugins.plugins.opencode;
+				const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.environmentVariables = JSON.parse(serializedEnvironmentVariables);
 				await plugin.saveSettings();
 				await app.workspace.getLeavesOfType("opencode-conversations")[0].view.loadSessions();
@@ -272,16 +275,16 @@ describe("OpenCode plugin in a fresh vault", function () {
 	});
 
 	it("[issue #32] starts a new session when session history is empty", async function () {
-		await browser.executeObsidianCommand("opencode:open-conversations");
+		await browser.executeObsidianCommand(`${pluginId}:open-conversations`);
 		const previousEnvironmentVariables = await browser.execute(() => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			return { ...plugin.settings.environmentVariables };
 		});
 
 		try {
 			await browser.execute(async () => {
 				const app = (window as any).app;
-				const plugin = app.plugins.plugins.opencode;
+				const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.environmentVariables = {
 					...plugin.settings.environmentVariables,
 					OBSIDIAN_OPENCODE_EMPTY_SESSIONS: "1",
@@ -300,7 +303,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		} finally {
 			await browser.execute(async (serializedEnvironmentVariables: string) => {
 				const app = (window as any).app;
-				const plugin = app.plugins.plugins.opencode;
+				const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.environmentVariables = JSON.parse(serializedEnvironmentVariables);
 				await plugin.saveSettings();
 				await app.workspace.getLeavesOfType("opencode-conversations")[0].view.loadSessions();
@@ -310,7 +313,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 
 	it("[issue #27] accepts input after New Session replaces an existing PTY", async function () {
 		const previousPtyPid = await terminalPtyPid();
-		await browser.executeObsidianCommand("opencode:new-session");
+		await browser.executeObsidianCommand(`${pluginId}:new-session`);
 		await browser.waitUntil(async () => {
 			const currentPid = await terminalPtyPid();
 			return currentPid !== null && currentPid !== previousPtyPid;
@@ -325,7 +328,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 	});
 
 	it("[issue #27] continues the last session and remains responsive", async function () {
-		await browser.executeObsidianCommand("opencode:continue-last-session");
+		await browser.executeObsidianCommand(`${pluginId}:continue-last-session`);
 		await waitForTerminalText('ARGS:["-c"]');
 
 		const textarea = browser.$(".opencode-terminal-container .xterm-helper-textarea");
@@ -337,7 +340,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 	it("fits the replacement PTY when restarting the terminal", async function () {
 		const expected = await browser.execute(async () => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.environmentVariables = {
 				...plugin.settings.environmentVariables,
 				OBSIDIAN_OPENCODE_REPORT_SIZE: "1",
@@ -350,7 +353,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		expect(expected).not.toBeNull();
 
 		try {
-			await browser.executeObsidianCommand("opencode:restart-terminal");
+			await browser.executeObsidianCommand(`${pluginId}:restart-terminal`);
 			await waitForTerminalText(`SIZE:${expected!.cols}x${expected!.rows}`);
 			const dimensions = await browser.execute(() => {
 				const view = (window as any).app.workspace.getLeavesOfType("opencode-terminal")[0].view;
@@ -359,7 +362,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			expect(dimensions).toEqual(expected);
 		} finally {
 			await browser.execute(async () => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				delete plugin.settings.environmentVariables.OBSIDIAN_OPENCODE_REPORT_SIZE;
 				await plugin.saveSettings();
 			});
@@ -372,7 +375,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			for (const leaf of app.workspace.getLeavesOfType("opencode-terminal")) {
 				await leaf.detach();
 			}
-			await app.plugins.plugins.opencode.activateTerminalView();
+			await app.plugins.plugins[(window as any).opencodeTestPluginId].activateTerminalView();
 		});
 		const textarea = browser.$(".opencode-terminal-container .xterm-helper-textarea");
 		await expect(textarea).toExist();
@@ -407,7 +410,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		const variableName = "OBSIDIAN_OPENCODE_TEST_VARIABLE";
 		const variableValue = 'issue #37 exact value = $HOME; "quoted"';
 		const previousEnvironmentVariables = await browser.execute(async (name: string, value: string) => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			const previous = { ...plugin.settings.environmentVariables };
 			plugin.settings.environmentVariables = {
 				...plugin.settings.environmentVariables,
@@ -418,18 +421,18 @@ describe("OpenCode plugin in a fresh vault", function () {
 		}, variableName, variableValue);
 
 		try {
-			await browser.executeObsidianCommand("opencode:open-conversations");
+			await browser.executeObsidianCommand(`${pluginId}:open-conversations`);
 			const conversations = browser.$(".opencode-conversation-container");
 			await conversations.$(".opencode-session-item").click();
 			await expect(conversations.$(".opencode-session-info")).toHaveText(expect.stringContaining(variableValue));
 			await browser.execute(async () => {
-				await (window as any).app.plugins.plugins.opencode.newSession();
+				await (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId].newSession();
 			});
 			const digest = createHash("sha256").update(variableValue).digest("hex").slice(0, 16);
 			await waitForTerminalText(`ENV_SHA256:${digest}`);
 		} finally {
 			await browser.execute(async (serializedEnvironmentVariables: string) => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.environmentVariables = JSON.parse(serializedEnvironmentVariables);
 				await plugin.saveSettings();
 			}, JSON.stringify(previousEnvironmentVariables));
@@ -442,7 +445,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			for (const leaf of app.workspace.getLeavesOfType("opencode-terminal")) {
 				await leaf.detach();
 			}
-			await app.plugins.plugins.opencode.activateTerminalView();
+			await app.plugins.plugins[(window as any).opencodeTestPluginId].activateTerminalView();
 		});
 		await expect(browser.$(".opencode-terminal-container .xterm-helper-textarea")).toExist();
 		await waitForTerminalText("OpenCode isolated test stub");
@@ -492,7 +495,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			for (const leaf of app.workspace.getLeavesOfType("opencode-terminal")) {
 				await leaf.detach();
 			}
-			await app.plugins.plugins.opencode.activateTerminalView();
+			await app.plugins.plugins[(window as any).opencodeTestPluginId].activateTerminalView();
 		});
 		await expect(browser.$(".opencode-terminal-container .xterm-helper-textarea")).toExist();
 		await waitForTerminalText("OpenCode isolated test stub");
@@ -545,12 +548,12 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (!isWsl2()) this.skip();
 		const clipboard = createWslWindowsClipboard();
 		if (!clipboard) throw new Error("WSL2 was detected without a Windows clipboard bridge");
-		await browser.executeObsidianCommand("opencode:close-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 		await browser.waitUntil(() => browser.execute(() => (
 			(window as any).app.workspace.getLeavesOfType("opencode-terminal").length === 0
 		)), { timeoutMsg: "Existing terminal did not close before conditional clipboard testing" });
 		const previousEnvironmentVariables = await browser.execute(async () => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			const previous = { ...plugin.settings.environmentVariables };
 			plugin.settings.environmentVariables = {
 				...previous,
@@ -559,7 +562,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			await plugin.saveSettings();
 			return previous;
 		});
-		await browser.executeObsidianCommand("opencode:open-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		await expect(browser.$(".opencode-terminal-container .xterm")).toExist();
 		const originalClipboard = await clipboard.readText();
 		const copiedText = "Décodage éàèêôù 中文 😀 '$HOME'";
@@ -625,7 +628,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 				const app = (window as any).app;
 				const file = app.vault.getAbstractFileByPath("WSL clipboard verification.md");
 				if (file) await app.vault.delete(file);
-				await app.plugins.plugins.opencode.activateTerminalView();
+				await app.plugins.plugins[(window as any).opencodeTestPluginId].activateTerminalView();
 			});
 
 			await clipboard.writeText(pastedText);
@@ -699,11 +702,11 @@ describe("OpenCode plugin in a fresh vault", function () {
 				if (view?.__wslClipboardOriginalWrite) {
 					view.ptySession.writeStdin = view.__wslClipboardOriginalWrite;
 				}
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.environmentVariables = JSON.parse(serializedEnvironmentVariables);
 				await plugin.saveSettings();
 			}, JSON.stringify(previousEnvironmentVariables));
-			await browser.executeObsidianCommand("opencode:close-terminal");
+			await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 		}
 	});
 
@@ -716,7 +719,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		const originalImage = await clipboard.readImagePng!();
 		const originalText = originalImage ? null : await clipboard.readText();
 		const previous = await browser.execute(async (opencodePath: string, profileDirectory: string) => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			const settings = {
 				opencodePath: plugin.settings.opencodePath,
 				newSessionArgs: plugin.settings.newSessionArgs,
@@ -761,7 +764,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			if (originalImage) await clipboard.writeImagePng!(originalImage);
 			else await clipboard.writeText(originalText ?? "");
 			await browser.execute(async (settings: typeof previous) => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				await plugin.viewCoordinator.closeTerminal();
 				plugin.settings.opencodePath = settings.opencodePath;
 				plugin.settings.newSessionArgs = settings.newSessionArgs;
@@ -777,7 +780,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (process.platform !== "win32") this.skip();
 		await browser.execute(async (cmdStubPath: string) => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = cmdStubPath;
 			await plugin.saveSettings();
 			await plugin.newSession();
@@ -795,7 +798,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 
 		await browser.execute(async (stubPath: string) => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = stubPath;
 			await plugin.saveSettings();
 			await plugin.newSession();
@@ -807,7 +810,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (process.platform !== "win32" || process.env.OPENCODE_REAL_E2E !== "1") this.skip();
 		await browser.execute(async () => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = "opencode";
 			await plugin.saveSettings();
 			const existing = app.workspace.getLeavesOfType("opencode-terminal")[0]?.view;
@@ -875,7 +878,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (process.platform !== "win32" || process.env.OPENCODE_REAL_E2E !== "1") this.skip();
 		await browser.execute(async () => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = "opencode";
 			await plugin.saveSettings();
 			const existing = app.workspace.getLeavesOfType("opencode-terminal")[0]?.view;
@@ -909,7 +912,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (process.platform !== "win32" || process.env.OPENCODE_REAL_E2E !== "1") this.skip();
 		await browser.execute(async () => {
 			const app = (window as any).app;
-			await app.plugins.plugins.opencode.newSession();
+			await app.plugins.plugins[(window as any).opencodeTestPluginId].newSession();
 		});
 		await waitForTerminalText("Ask anything");
 		const idleWheelInput = await browser.execute(async () => {
@@ -974,7 +977,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (process.platform !== "win32" || process.env.OPENCODE_REAL_E2E !== "1") this.skip();
 		await browser.execute(async () => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = "opencode";
 			await plugin.saveSettings();
 			const existing = app.workspace.getLeavesOfType("opencode-terminal")[0]?.view;
@@ -1223,7 +1226,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (process.platform !== "win32" || process.env.OPENCODE_REAL_E2E !== "1") this.skip();
 		await browser.execute(async () => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			const view = app.workspace.getLeavesOfType("opencode-terminal")[0].view;
 			view.terminal.reset();
 			view.fitAddon.fit();
@@ -1280,7 +1283,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		if (process.platform !== "win32" || process.env.OPENCODE_REAL_E2E !== "1") this.skip();
 		await browser.execute(async () => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			const view = app.workspace.getLeavesOfType("opencode-terminal")[0].view;
 			view.terminal.reset();
 			view.fitAddon.fit();
@@ -1331,24 +1334,24 @@ describe("OpenCode plugin in a fresh vault", function () {
 		expect(geometry.cols).toBeGreaterThan(20);
 		expect(geometry.rows).toBeGreaterThan(5);
 
-		await browser.executeObsidianCommand("opencode:open-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		const leafCount = await browser.execute(() => (
 			(window as any).app.workspace.getLeavesOfType("opencode-terminal").length
 		));
 		expect(leafCount).toBe(1);
 
-		await browser.executeObsidianCommand("opencode:toggle-terminal-sidebar");
+		await browser.executeObsidianCommand(`${pluginId}:toggle-terminal-sidebar`);
 		await browser.waitUntil(() => browser.execute(() => Boolean((window as any).app.workspace.rightSplit.collapsed)), {
 			timeoutMsg: "Terminal sidebar did not collapse",
 		});
-		await browser.executeObsidianCommand("opencode:toggle-terminal-sidebar");
+		await browser.executeObsidianCommand(`${pluginId}:toggle-terminal-sidebar`);
 		await browser.waitUntil(() => browser.execute(() => !(window as any).app.workspace.rightSplit.collapsed), {
 			timeoutMsg: "Terminal sidebar did not reveal",
 		});
 	});
 
 	it("[issue #36] reports terminal and cell pixel geometry to OpenCode 2", async function () {
-		await browser.executeObsidianCommand("opencode:open-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		await expect(browser.$(".opencode-terminal-container .xterm")).toExist();
 		await browser.pause(100);
 
@@ -1388,7 +1391,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 	it("[issues #36, #54] negotiates SIXEL and copies a rendered image to Windows under WSL2", async function () {
 		if (process.platform === "win32") this.skip();
 		const previousExecutable = await browser.execute(async (stubPath: string): Promise<string> => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			const previous = String(plugin.settings.opencodePath ?? "");
 			plugin.settings.opencodePath = stubPath;
 			await plugin.saveSettings();
@@ -1454,7 +1457,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			}
 		} finally {
 			await browser.execute(async (opencodePath: string) => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.opencodePath = opencodePath;
 				await plugin.saveSettings();
 			}, previousExecutable);
@@ -1527,7 +1530,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 
 	it("[issue #28] keeps the embedded editor server out of global discovery", async function () {
 		await browser.execute(async () => {
-			await (window as any).app.plugins.plugins.opencode.activateTerminalView();
+			await (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId].activateTerminalView();
 		});
 		await expect(browser.$(".opencode-terminal-container .xterm")).toExist();
 		await browser.waitUntil(() => browser.execute(() => {
@@ -1546,12 +1549,12 @@ describe("OpenCode plugin in a fresh vault", function () {
 	});
 
 	it("[smoke] closes the terminal through its configurable Obsidian command", async function () {
-		await browser.executeObsidianCommand("opencode:open-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		await expect(browser.$(".opencode-terminal-container .xterm")).toExist();
 		expect(await browser.execute(() => (
 			(window as any).app.workspace.getLeavesOfType("opencode-terminal").length
 		))).toBe(1);
-		await browser.executeObsidianCommand("opencode:close-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 		await browser.waitUntil(() => browser.execute(() => (
 			(window as any).app.workspace.getLeavesOfType("opencode-terminal").length === 0
 		)), { timeoutMsg: "OpenCode terminal did not close" });
