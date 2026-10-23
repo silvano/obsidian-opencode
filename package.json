@@ -56,7 +56,10 @@
     "@puppeteer/browsers": "3.2.2",
     "mocha@11.8.0": {
       "diff": "8.0.4",
-      "serialize-javascript": "7.1.1"
+      "serialize-javascript": "7.1.2"
+    },
+    "obsidian": {
+      "moment": "2.31.0"
     }
   }
 }
