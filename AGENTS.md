@@ -3,6 +3,7 @@
 - Fork of `kriss-spy/obsidian-opencode`. Plugin id is `opencode-silvano` (`manifest.json`). Never change it back to `opencode`, and never hardcode the id; code and e2e specs derive it from the manifest.
 - Every user-visible change in this fork must be added to the "Changes in this fork" list in `README.md`, in the same commit. Don't copy upstream documentation into the README; link to it.
 - Sync upstream with `git merge upstream/main`. Never rebase, because that rewrites published release commits and tags. On version conflicts in `package.json`/`manifest.json`/`versions.json`, keep the fork's values.
+- `README.md` is fork-only: `.gitattributes` sets `merge=ours` so upstream merges never change it. The driver must be enabled once per clone with `git config merge.ours.driver true`; check it before every upstream merge.
 - Single esbuild bundle: `src/main.ts` -> `main.js` (CJS, Node builtins/`obsidian`/`electron` external). `main.js` is **tracked in git** and is committed with source changes, so rebuild before committing.
 - Read `CONTEXT.md` (domain vocabulary) and `docs/adr/` before changing an area. Before touching keyboard, IME, paste or drop handling, read `docs/terminal-input.md` and ADR 0001: xterm `onData` must stay the only writer to `PtySession.writeStdin`.
 
