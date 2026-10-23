@@ -54,7 +54,7 @@ jobs:
           const versions = [manifest.version, read('package.json').version, lock.version, lock.packages[''].version];
           if (versions.some(value => value !== version)) throw new Error('Tag and package versions must match');
           if (read('versions.json')[version] !== manifest.minAppVersion) throw new Error('Compatibility mapping must match');
-          for (const name of ['main.js', 'manifest.json', 'styles.css', `docs/releases/${version}.md`]) {
+          for (const name of ['main.js', 'manifest.json', 'styles.css']) {
             if (!fs.statSync(name).size) throw new Error(`Empty release asset: ${name}`);
           }
           JS
@@ -68,8 +68,7 @@ jobs:
             main.js
             manifest.json
             styles.css
-          body_path: docs/releases/${{ github.ref_name }}.md
-          generate_release_notes: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
