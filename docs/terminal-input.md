@@ -50,7 +50,7 @@ The browser-side input path is shared across operating systems. Only the PTY tra
 
 | Platform | PTY backend | Input handling difference |
 | --- | --- | --- |
-| Windows 10 1809+ | Node helper -> embedded zigpty native module -> ConPTY | None before `PtySession`; the helper writes UTF-8 strings to zigpty. xterm's `windowsPty` option affects terminal rendering/reflow, not key ownership. |
+| Windows 10 1809+ | Node helper -> embedded zigpty native module -> ConPTY | None before `PtySession`; the helper writes UTF-8 strings to zigpty. `PtySession.writeStdin` sends a lone ESC as a win32-input-mode Escape key down/up pair, because ConPTY holds a lone trailing ESC once it has seen win32-input-mode input (the host theme replies). xterm's `windowsPty` option affects terminal rendering/reflow, not key ownership. |
 | WSL2 + X410 | Unix PTY plus Windows PowerShell clipboard bridge | OpenCode's OSC 52 copy-on-select output, `Ctrl+V`, and rendered-image context-menu copy cross the Windows clipboard boundary as Base64. In V2 `terminal.copy: "manual"` mode from `cli.json`/`tui.json`, or with the legacy disable-copy environment flag, `Ctrl+C` copies an active xterm selection; without a selection it remains owned by OpenCode. |
 | Linux and macOS | Node child -> Python proxy -> `pty.fork()` | None before `PtySession`; the proxy forwards stdin bytes to the pseudoterminal. |
 

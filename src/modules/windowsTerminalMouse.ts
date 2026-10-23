@@ -102,12 +102,20 @@ export class WheelLineAccumulator {
 	}
 }
 
+function isPickerHeader(line: string): boolean {
+	return (line.startsWith("Sessions") || line.startsWith("Select ")) && line.includes("esc");
+}
+
 export function isOpenCodePicker(buffer: TerminalBuffer): boolean {
 	for (let index = 0; index < buffer.length; index++) {
-		const line = buffer.getLine(index)?.translateToString(true).trim() ?? "";
-		if ((line.startsWith("Sessions") || line.startsWith("Select ")) && line.includes("esc")) return true;
+		if (isPickerHeader(buffer.getLine(index)?.translateToString(true).trim() ?? "")) return true;
 	}
 	return false;
+}
+
+// The header row carries the clickable `esc` hint; it is not a selectable item.
+export function isPickerHeaderRow(buffer: TerminalBuffer, visibleRow: number): boolean {
+	return isPickerHeader(pickerTargetAtRow(buffer, visibleRow));
 }
 
 export function pickerTargetAtRow(buffer: TerminalBuffer, visibleRow: number): string {

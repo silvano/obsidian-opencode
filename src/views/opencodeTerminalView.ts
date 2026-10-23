@@ -19,6 +19,7 @@ import {
 	findOpenCodeScrollRegionRows,
 	findOpenCodeScrollbarThumb,
 	isOpenCodePicker,
+	isPickerHeaderRow,
 	pickerTargetAtRow,
 	SCROLL_PAGE_DOWN,
 	SCROLL_PAGE_UP,
@@ -483,6 +484,10 @@ export class OpencodeTerminalView extends ItemView {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			if (event.type === "mouseup") {
+				if (isPickerHeaderRow(terminal.buffer.active, clickedRow)) {
+					terminal.input("\x1b", true);
+					return;
+				}
 				const targetText = pickerTargetAtRow(terminal.buffer.active, clickedRow);
 				if (!targetText) return;
 				terminal.input(CLEAR_PICKER_QUERY + targetText, true);

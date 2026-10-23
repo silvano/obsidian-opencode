@@ -3,6 +3,7 @@ import {
 	findOpenCodeScrollbarThumb,
 	findOpenCodeScrollRegionRows,
 	isOpenCodePicker,
+	isPickerHeaderRow,
 	pickerTargetAtRow,
 	SCROLL_PAGE_DOWN,
 	SCROLL_PAGE_UP,
@@ -26,6 +27,13 @@ describe("Windows terminal mouse adapter", () => {
 		expect(isOpenCodePicker(buffer(["Sessions                         esc"]))).toBe(true);
 		expect(isOpenCodePicker(buffer(["Select model                     esc"]))).toBe(true);
 		expect(isOpenCodePicker(buffer(["ordinary terminal output"]))).toBe(false);
+	});
+
+	it("recognizes the picker header row that carries the esc hint", () => {
+		const terminalBuffer = buffer(["scrollback", "┃ Select agent                esc ┃", "┃ ● build ┃"], 1);
+
+		expect(isPickerHeaderRow(terminalBuffer, 0)).toBe(true);
+		expect(isPickerHeaderRow(terminalBuffer, 1)).toBe(false);
 	});
 
 	it("extracts a searchable picker label from a visible row", () => {

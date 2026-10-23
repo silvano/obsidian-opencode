@@ -20490,7 +20490,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // manifest.json
-var version = "2.3.0";
+var version = "2.3.1";
 
 // src/editorServer.ts
 var fs = __toESM(require("fs"));
@@ -21488,13 +21488,18 @@ var WheelLineAccumulator = class {
     return (lineCount < 0 ? SCROLL_LINE_UP : SCROLL_LINE_DOWN).repeat(Math.abs(lineCount));
   }
 };
+function isPickerHeader(line) {
+  return (line.startsWith("Sessions") || line.startsWith("Select ")) && line.includes("esc");
+}
 function isOpenCodePicker(buffer) {
   var _a, _b;
   for (let index = 0; index < buffer.length; index++) {
-    const line = (_b = (_a = buffer.getLine(index)) == null ? void 0 : _a.translateToString(true).trim()) != null ? _b : "";
-    if ((line.startsWith("Sessions") || line.startsWith("Select ")) && line.includes("esc")) return true;
+    if (isPickerHeader((_b = (_a = buffer.getLine(index)) == null ? void 0 : _a.translateToString(true).trim()) != null ? _b : "")) return true;
   }
   return false;
+}
+function isPickerHeaderRow(buffer, visibleRow) {
+  return isPickerHeader(pickerTargetAtRow(buffer, visibleRow));
 }
 function pickerTargetAtRow(buffer, visibleRow) {
   var _a, _b;
@@ -22491,6 +22496,10 @@ var OpencodeTerminalView = class extends import_obsidian4.ItemView {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (event.type === "mouseup") {
+        if (isPickerHeaderRow(terminal.buffer.active, clickedRow)) {
+          terminal.input("\x1B", true);
+          return;
+        }
         const targetText = pickerTargetAtRow(terminal.buffer.active, clickedRow);
         if (!targetText) return;
         terminal.input(CLEAR_PICKER_QUERY + targetText, true);
@@ -23461,6 +23470,7 @@ function unixTerminalSize(terminal) {
     clamp((_d = (_c = terminal.element) == null ? void 0 : _c.clientHeight) != null ? _d : 0, 0)
   ].join("x");
 }
+var WIN32_ESCAPE_KEY = "\x1B[27;1;27;1;0;1_\x1B[27;1;27;0;0;1_";
 function childExit(child) {
   if (!child || !child.pid || child.exitCode != null || child.signalCode != null) return Promise.resolve();
   return new Promise((resolve3) => {
@@ -23742,6 +23752,7 @@ Error: ${err.message}\r
           this.windowsInterruptResetTimer = null;
         }, 3e3);
       }
+      if (this.backend === 1 /* WindowsConPty */ && data === "\x1B") data = WIN32_ESCAPE_KEY;
       this.ptyProcess.stdin.write(data);
     }
   }

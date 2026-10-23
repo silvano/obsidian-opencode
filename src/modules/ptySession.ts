@@ -247,6 +247,11 @@ enum PtyBackend {
 	WindowsConPty,
 }
 
+// Once ConPTY has seen win32-input-mode input (the host theme replies), it
+// holds a lone trailing ESC as a possibly split sequence and never forwards
+// it. The Escape key down/up pair is decoded to a plain ESC for the child.
+const WIN32_ESCAPE_KEY = "\x1b[27;1;27;1;0;1_\x1b[27;1;27;0;0;1_";
+
 function childExit(child: ChildProcess | null): Promise<void> {
 	if (!child || !child.pid || child.exitCode != null || child.signalCode != null) return Promise.resolve();
 	return new Promise((resolve) => {
@@ -541,6 +546,7 @@ export class PtySession {
 					this.windowsInterruptResetTimer = null;
 				}, 3000);
 			}
+			if (this.backend === PtyBackend.WindowsConPty && data === "\x1b") data = WIN32_ESCAPE_KEY;
 			this.ptyProcess.stdin.write(data);
 		}
 	}

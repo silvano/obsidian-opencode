@@ -449,6 +449,51 @@ print(json.dumps({"after_partial": after_partial, "after_complete": resizes}))
 		expect(stripWindowsConPtyProbeArtifact("before+q4d73after")).toBe("beforeafter");
 	});
 
+	it("sends a lone Escape to Windows ConPTY as a win32-input-mode key event", () => {
+		const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+		const child = createProcess();
+		child.pid = 1234;
+		const job = createProcess();
+		job.pid = 5678;
+		vi.mocked(spawn)
+			.mockReturnValueOnce(child as unknown as ChildProcess)
+			.mockReturnValueOnce(job as unknown as ChildProcess);
+		const terminal = { rows: 24, cols: 80, write: vi.fn(), writeln: vi.fn() };
+
+		try {
+			const session = new PtySession();
+			session.spawn(terminal as unknown as Terminal, { opencodePath: "opencode", cwd: "C:\\vault", args: [] });
+			session.writeStdin("\x1b");
+			session.writeStdin("\x1b[A");
+			session.writeStdin("\x1bx");
+
+			expect(child.stdin.write.mock.calls.map(([data]) => data)).toEqual([
+				"\x1b[27;1;27;1;0;1_\x1b[27;1;27;0;0;1_",
+				"\x1b[A",
+				"\x1bx",
+			]);
+		} finally {
+			platform.mockRestore();
+		}
+	});
+
+	it("sends a lone Escape unchanged to a Unix PTY", () => {
+		const platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+		const child = createProcess();
+		vi.mocked(spawn).mockReturnValue(child as unknown as ChildProcess);
+		const terminal = { rows: 24, cols: 80, write: vi.fn(), writeln: vi.fn() };
+
+		try {
+			const session = new PtySession();
+			session.spawn(terminal as unknown as Terminal, { opencodePath: "opencode", cwd: "/tmp", args: [] });
+			session.writeStdin("\x1b");
+
+			expect(child.stdin.write).toHaveBeenCalledWith("\x1b");
+		} finally {
+			platform.mockRestore();
+		}
+	});
+
 	it("stops a Windows PTY after an interrupt triggers TUI teardown", async () => {
 		vi.useFakeTimers();
 		const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
