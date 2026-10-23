@@ -18,22 +18,79 @@ export interface KeyRouterContext {
 	terminal: Terminal;
 	container: HTMLElement;
 	reservedTerminalHotkeys: ReadonlySet<string>;
+	suspendTerminalHotkeys?: ReadonlySet<string>;
+	onSuspendBlocked?: () => void;
 	clipboard?: TerminalClipboard;
 	copySelectionOnCtrlC?: boolean | (() => boolean);
 	onClipboardError?: (message: string) => void;
 	onClipboardImagePaste?: (png: Buffer) => void | Promise<void>;
+	shiftEnterNewline?: boolean;
+	onShiftEnterNewline?: () => void;
 }
 
 export class TerminalKeyRouter {
 	private disposers: Array<() => void> = [];
+	private shiftEnterDisposer: (() => void) | null = null;
+	private shiftEnterTimers = new Set<{ id: number; window: Window }>();
 
 	register(context: KeyRouterContext): void {
+		this.registerSuspendGuard(context);
 		this.registerShortcutScope(context);
+		this.setShiftEnterNewline(context.terminal, context.shiftEnterNewline ?? false, context.onShiftEnterNewline);
 		if (context.clipboard) {
 			this.registerWslClipboard(context);
 		} else {
 			this.registerPasteHandler(context);
 		}
+	}
+
+	private registerSuspendGuard(context: KeyRouterContext): void {
+		const handler = (event: KeyboardEvent) => {
+			if (event.defaultPrevented || event.isComposing || isImeKey(event)) return;
+			const modifiers = [
+				...(event.ctrlKey ? ["Ctrl"] : []), ...(event.altKey ? ["Alt"] : []),
+				...(event.shiftKey ? ["Shift"] : []), ...(event.metaKey ? ["Meta"] : []),
+			] as Hotkey["modifiers"];
+			const key = normalizeObsidianHotkey({ modifiers, key: event.key });
+			if (!context.suspendTerminalHotkeys?.has(key)) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (!event.repeat) context.onSuspendBlocked?.();
+		};
+		context.container.addEventListener("keydown", handler, true);
+		this.disposers.push(() => context.container.removeEventListener("keydown", handler, true));
+	}
+
+	setShiftEnterNewline(terminal: Terminal, enabled: boolean, onShiftEnterNewline?: () => void): void {
+		this.shiftEnterDisposer?.();
+		this.shiftEnterDisposer = null;
+		this.clearShiftEnterTimers();
+		if (!enabled || !onShiftEnterNewline) return;
+
+		terminal.attachCustomKeyEventHandler((event) => {
+			if (event.isComposing || isImeKey(event)) return true;
+			if (event.type === "keydown" && event.key === "Enter" && event.shiftKey &&
+				!event.ctrlKey && !event.altKey && !event.metaKey) {
+				event.preventDefault();
+				// xterm defers compositionend commits by one task. Queue this after
+				// that task so composed text reaches onData before the newline.
+				const ownerWindow = terminal.element?.ownerDocument.defaultView ?? window;
+				const timer = { id: 0, window: ownerWindow };
+				timer.id = ownerWindow.setTimeout(() => {
+					this.shiftEnterTimers.delete(timer);
+					onShiftEnterNewline();
+				}, 0);
+				this.shiftEnterTimers.add(timer);
+				return false;
+			}
+			return true;
+		});
+		this.shiftEnterDisposer = () => terminal.attachCustomKeyEventHandler(() => true);
+	}
+
+	private clearShiftEnterTimers(): void {
+		for (const timer of this.shiftEnterTimers) timer.window.clearTimeout(timer.id);
+		this.shiftEnterTimers.clear();
 	}
 
 	private registerWslClipboard(context: KeyRouterContext): void {
@@ -141,8 +198,7 @@ export class TerminalKeyRouter {
 			for (const hotkey of hotkeys) {
 				if (context.reservedTerminalHotkeys.has(normalizeObsidianHotkey(hotkey))) continue;
 				const handler = scope.register(hotkey.modifiers, hotkey.key, (event) => {
-					const legacyKeyCode = Reflect.get(event, "keyCode") as unknown;
-					if (event.isComposing || legacyKeyCode === 229) return;
+					if (event.isComposing || isImeKey(event)) return;
 					return appInternals.commands?.executeCommandById(commandId) ? false : undefined;
 				});
 				this.disposers.push(() => scope.unregister(handler));
@@ -199,9 +255,18 @@ export class TerminalKeyRouter {
 	}
 
 	dispose(): void {
+		this.shiftEnterDisposer?.();
+		this.shiftEnterDisposer = null;
+		this.clearShiftEnterTimers();
 		for (const disposer of this.disposers) {
 			try { disposer(); } catch { /* ignore */ }
 		}
 		this.disposers = [];
 	}
+}
+
+// Some Electron IMEs send 229 before isComposing becomes true. Keep that
+// compatibility check isolated instead of using deprecated keyCode for keys.
+function isImeKey(event: KeyboardEvent): boolean {
+	return Reflect.get(event, "keyCode") === 229;
 }

@@ -58,7 +58,7 @@ describe("theme preview integration", () => {
 	it("sends rapid navigation as one batch after the input burst", () => {
 		vi.useFakeTimers();
 		const sent: string[] = [];
-		const input = new ThemePreviewInputBatcher((data) => sent.push(data));
+		const input = new ThemePreviewInputBatcher((data) => sent.push(data), global as unknown as Window);
 
 		input.send("\x1bOB", true);
 		input.send("\x1bOB", true);
@@ -70,7 +70,7 @@ describe("theme preview integration", () => {
 
 	it("applies pending navigation before confirming and leaves other terminal input alone", () => {
 		const sent: string[] = [];
-		const input = new ThemePreviewInputBatcher((data) => sent.push(data));
+		const input = new ThemePreviewInputBatcher((data) => sent.push(data), global as unknown as Window);
 
 		input.send("\x1b[B", true);
 		input.send("\x1b[B", true);
@@ -83,7 +83,7 @@ describe("theme preview integration", () => {
 	it("waits until navigation input goes quiet before previewing", () => {
 		vi.useFakeTimers();
 		const sent: string[] = [];
-		const input = new ThemePreviewInputBatcher((data) => sent.push(data));
+		const input = new ThemePreviewInputBatcher((data) => sent.push(data), global as unknown as Window);
 
 		input.send("\x1b[B", true);
 		vi.advanceTimersByTime(30);
@@ -97,7 +97,7 @@ describe("theme preview integration", () => {
 
 	it("drops pending previews when the user cancels the picker", () => {
 		const sent: string[] = [];
-		const input = new ThemePreviewInputBatcher((data) => sent.push(data));
+		const input = new ThemePreviewInputBatcher((data) => sent.push(data), global as unknown as Window);
 		input.send("\x1b[B", true);
 		input.send("\x1b", true);
 
@@ -107,7 +107,7 @@ describe("theme preview integration", () => {
 	it("answers terminal color probes without flushing pending navigation", () => {
 		vi.useFakeTimers();
 		const sent: string[] = [];
-		const input = new ThemePreviewInputBatcher((data) => sent.push(data));
+		const input = new ThemePreviewInputBatcher((data) => sent.push(data), global as unknown as Window);
 		const response = "\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\";
 		input.send("\x1b[B", true);
 		input.send(response, true);
@@ -120,7 +120,7 @@ describe("theme preview integration", () => {
 	it("drops queued previews when the terminal closes", () => {
 		vi.useFakeTimers();
 		const sent: string[] = [];
-		const input = new ThemePreviewInputBatcher((data) => sent.push(data));
+		const input = new ThemePreviewInputBatcher((data) => sent.push(data), global as unknown as Window);
 		input.send("\x1b[B", true);
 		input.send("\x1b[B", true);
 
@@ -129,4 +129,14 @@ describe("theme preview integration", () => {
 
 		expect(sent).toEqual([]);
 	});
+});
+
+it("cancels timer zero through its original popout window", () => {
+	const write = vi.fn();
+	const host = { setTimeout: vi.fn(() => 0), clearTimeout: vi.fn() };
+	const input = new ThemePreviewInputBatcher(write, host as unknown as Window);
+	input.send("\x1b[A", true);
+	input.dispose();
+	expect(host.clearTimeout).toHaveBeenCalledWith(0);
+	expect(write).not.toHaveBeenCalled();
 });

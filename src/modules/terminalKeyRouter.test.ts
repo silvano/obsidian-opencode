@@ -10,8 +10,11 @@ function registerRouter(
 	clipboard?: { readText(): Promise<string>; writeText(text: string): Promise<void> },
 	onClipboardImagePaste?: (png: Buffer) => void | Promise<void>,
 	copySelectionOnCtrlC = false,
+	suspendTerminalHotkeys?: ReadonlySet<string>,
 ) {
-	const containerHandlers = new Map<string, (event: Event) => void>();
+	const containerHandlers = new Map<string, Array<(event: Event) => void>>();
+	const suspendBlocked = vi.fn();
+	let customKeyEventHandler: ((event: KeyboardEvent) => boolean) | undefined;
 
 	const terminalPaste = vi.fn();
 	const terminalClearSelection = vi.fn();
@@ -43,6 +46,10 @@ function registerRouter(
 			keymap: { pushScope, popScope },
 		},
 		terminal: {
+			element: { ownerDocument: { defaultView: global } },
+			attachCustomKeyEventHandler: (handler: (event: KeyboardEvent) => boolean) => {
+				customKeyEventHandler = handler;
+			},
 			paste: terminalPaste,
 			hasSelection: () => Boolean(selection),
 			getSelection: () => selection,
@@ -55,6 +62,8 @@ function registerRouter(
 			},
 		},
 		reservedTerminalHotkeys,
+		suspendTerminalHotkeys,
+		onSuspendBlocked: suspendBlocked,
 		clipboard,
 		copySelectionOnCtrlC,
 		onClipboardError: clipboardError,
@@ -63,7 +72,7 @@ function registerRouter(
 			contains: () => true,
 			ownerDocument: { activeElement: null },
 			addEventListener: (type: string, handler: (event: Event) => void) => {
-				containerHandlers.set(type, handler);
+				containerHandlers.set(type, [...(containerHandlers.get(type) ?? []), handler]);
 			},
 			removeEventListener: vi.fn(),
 		},
@@ -74,6 +83,7 @@ function registerRouter(
 
 	return {
 		terminalPaste,
+		suspendBlocked,
 		terminalClearSelection,
 		clipboardError,
 		setSelection: (value: string) => { selection = value; },
@@ -81,36 +91,95 @@ function registerRouter(
 		pushScope,
 		popScope,
 		dispatchContainerEvent: (type: string, event: Partial<FocusEvent> = {}) => {
-			containerHandlers.get(type)?.(event as FocusEvent);
+			containerHandlers.get(type)?.forEach(handler => handler(event as FocusEvent));
 		},
 		dispatchPaste: (text: string) => {
 			const preventDefault = vi.fn();
 			const stopImmediatePropagation = vi.fn();
-			containerHandlers.get("paste")?.({
+			containerHandlers.get("paste")?.forEach(handler => handler({
 				target: {},
 				clipboardData: { getData: () => text },
 				preventDefault,
 				stopImmediatePropagation,
-			} as unknown as ClipboardEvent);
+			} as unknown as ClipboardEvent));
 			return { preventDefault, stopImmediatePropagation };
 		},
 		dispatchKeydown: (event: Partial<KeyboardEvent>) => {
 			const preventDefault = vi.fn();
 			const stopImmediatePropagation = vi.fn();
-			containerHandlers.get("keydown")?.({
+			let stopped = false;
+			let prevented = false;
+			const dispatched = {
 				target: {},
-				preventDefault,
-				stopImmediatePropagation,
+				get defaultPrevented() { return prevented; },
+				preventDefault: () => { preventDefault(); prevented = true; },
+				stopImmediatePropagation: () => { stopImmediatePropagation(); stopped = true; },
 				...event,
-			} as unknown as KeyboardEvent);
+			} as unknown as KeyboardEvent;
+			for (const handler of containerHandlers.get("keydown") ?? []) {
+				handler(dispatched);
+				if (stopped) break;
+			}
 			return { preventDefault, stopImmediatePropagation };
 		},
 		dispatchOsc52: (data: string) => osc52Handler?.(data),
+		dispatchTerminalKey: (event: Partial<KeyboardEvent> = {}) => {
+			const preventDefault = vi.fn();
+			const result = customKeyEventHandler?.({
+				type: "keydown",
+				key: "Enter",
+				shiftKey: true,
+				ctrlKey: false,
+				altKey: false,
+				metaKey: false,
+				isComposing: false,
+				keyCode: 13,
+				preventDefault,
+				...event,
+			} as unknown as KeyboardEvent);
+			return { result, preventDefault };
+		},
+		setShiftEnterNewline: (enabled: boolean, callback?: () => void) =>
+			router.setShiftEnterNewline(context.terminal, enabled, callback),
+		terminal: context.terminal,
 		router,
 	};
 }
 
 describe("TerminalKeyRouter", () => {
+	it("cancels deferred input through its original window after moving the terminal", () => {
+		const context = registerRouter();
+		const firstWindow = { setTimeout: vi.fn(() => 7), clearTimeout: vi.fn() };
+		const nextWindow = { setTimeout: vi.fn(() => 7), clearTimeout: vi.fn() };
+		Object.assign(context.terminal, { element: { ownerDocument: { defaultView: firstWindow } } });
+		context.setShiftEnterNewline(true, vi.fn());
+		context.dispatchTerminalKey();
+		Object.assign(context.terminal, { element: { ownerDocument: { defaultView: nextWindow } } });
+		context.dispatchTerminalKey();
+		context.router.dispose();
+		expect(firstWindow.clearTimeout).toHaveBeenCalledWith(7);
+		expect(nextWindow.clearTimeout).toHaveBeenCalledWith(7);
+	});
+	it("blocks suspend shortcuts before xterm while preserving composition and other modifiers", () => {
+		const context = registerRouter({}, new Set(), undefined, undefined, undefined, false, new Set(["ctrl+z"]));
+		const blocked = context.dispatchKeydown({ key: "z", ctrlKey: true });
+		expect(blocked.preventDefault).toHaveBeenCalledOnce();
+		expect(blocked.stopImmediatePropagation).toHaveBeenCalledOnce();
+		expect(context.suspendBlocked).toHaveBeenCalledOnce();
+		for (const extra of [{ isComposing: true }, { keyCode: 229 }, { shiftKey: true }, { altKey: true }, { metaKey: true }]) {
+			expect(context.dispatchKeydown({ key: "z", ctrlKey: true, ...extra }).preventDefault).not.toHaveBeenCalled();
+		}
+		context.dispatchKeydown({ key: "z", ctrlKey: true, repeat: true });
+		expect(context.suspendBlocked).toHaveBeenCalledOnce();
+		context.router.dispose();
+	});
+
+	it("leaves Ctrl+Z available when it is not a suspend binding", () => {
+		const context = registerRouter({}, new Set(), undefined, undefined, undefined, false, new Set());
+		expect(context.dispatchKeydown({ key: "z", ctrlKey: true }).preventDefault).not.toHaveBeenCalled();
+		context.router.dispose();
+	});
+
 	it("activates an isolated scope for effective Obsidian shortcuts", () => {
 		const { dispatchContainerEvent, executeCommandById, pushScope, router } = registerRouter();
 
@@ -238,6 +307,81 @@ describe("TerminalKeyRouter", () => {
 		expect(result).toBeUndefined();
 		expect(executeCommandById).not.toHaveBeenCalled();
 		router.dispose();
+	});
+
+	it("routes enabled Shift+Enter to the callback and preserves ordinary Enter and Alt+Enter", () => {
+		vi.useFakeTimers();
+		try {
+			const onShiftEnterNewline = vi.fn();
+			const context = registerRouter();
+			context.setShiftEnterNewline(true, onShiftEnterNewline);
+
+			const shiftEnter = context.dispatchTerminalKey();
+			expect(shiftEnter.result).toBe(false);
+			expect(shiftEnter.preventDefault).toHaveBeenCalledOnce();
+			vi.runAllTimers();
+			expect(onShiftEnterNewline).toHaveBeenCalledOnce();
+
+			expect(context.dispatchTerminalKey({ shiftKey: false }).result).toBe(true);
+			expect(context.dispatchTerminalKey({ altKey: true }).result).toBe(true);
+			expect(onShiftEnterNewline).toHaveBeenCalledOnce();
+			context.router.dispose();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("passes composing and legacy IME Shift+Enter events to xterm", () => {
+		const onShiftEnterNewline = vi.fn();
+		const context = registerRouter();
+		context.setShiftEnterNewline(true, onShiftEnterNewline);
+
+		expect(context.dispatchTerminalKey({ isComposing: true }).result).toBe(true);
+		expect(context.dispatchTerminalKey({ keyCode: 229 }).result).toBe(true);
+		expect(onShiftEnterNewline).not.toHaveBeenCalled();
+		context.router.dispose();
+	});
+
+	it("defers Shift+Enter until xterm can flush a completed composition", () => {
+		vi.useFakeTimers();
+		try {
+			const onShiftEnterNewline = vi.fn();
+			const context = registerRouter();
+			context.setShiftEnterNewline(true, onShiftEnterNewline);
+
+			const shiftEnter = context.dispatchTerminalKey();
+			expect(shiftEnter.result).toBe(false);
+			expect(onShiftEnterNewline).not.toHaveBeenCalled();
+
+			vi.runAllTimers();
+			expect(onShiftEnterNewline).toHaveBeenCalledOnce();
+			context.router.dispose();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("applies disabling and re-enabling of Shift+Enter immediately", () => {
+		vi.useFakeTimers();
+		try {
+			const onShiftEnterNewline = vi.fn();
+			const context = registerRouter();
+			context.setShiftEnterNewline(true, onShiftEnterNewline);
+			expect(context.dispatchTerminalKey().result).toBe(false);
+
+			context.setShiftEnterNewline(false, onShiftEnterNewline);
+			expect(context.dispatchTerminalKey().result).toBe(true);
+			vi.runAllTimers();
+			expect(onShiftEnterNewline).not.toHaveBeenCalled();
+
+			context.setShiftEnterNewline(true, onShiftEnterNewline);
+			expect(context.dispatchTerminalKey().result).toBe(false);
+			vi.runAllTimers();
+			expect(onShiftEnterNewline).toHaveBeenCalledOnce();
+			context.router.dispose();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("pushes the terminal scope once on focus and removes it on blur", () => {
