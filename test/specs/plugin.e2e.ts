@@ -550,7 +550,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			for (const leaf of app.workspace.getLeavesOfType("opencode-terminal")) {
 				await leaf.detach();
 			}
-			await app.plugins.plugins.opencode.activateTerminalView();
+			await app.plugins.plugins[(window as any).opencodeTestPluginId].activateTerminalView();
 		});
 		await expect(browser.$(".opencode-terminal-container .xterm-helper-textarea")).toExist();
 		await waitForTerminalText("OpenCode isolated test stub");
@@ -558,7 +558,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 		try {
 			const input = await browser.execute(async () => {
 				const app = (window as any).app;
-				const plugin = app.plugins.plugins.opencode;
+				const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.shiftEnterNewline = true;
 				await plugin.saveSettings();
 
@@ -599,7 +599,7 @@ describe("OpenCode plugin in a fresh vault", function () {
 			expect(input).toEqual(["안녕", "\x1b[13;2u"]);
 		} finally {
 			await browser.execute(async () => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				plugin.settings.shiftEnterNewline = false;
 				await plugin.saveSettings();
 			});

@@ -2,6 +2,11 @@ import * as path from "node:path";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { browser, expect } from "@wdio/globals";
+import { pluginId } from "../pluginId";
+
+before(async () => {
+	await browser.execute((id: string) => { (window as any).opencodeTestPluginId = id; }, pluginId);
+});
 
 describe("OpenCode touched-note status in a fresh vault", function () {
 	it("[smoke] [issue #21] retains a successful edit warning with an empty API diff and resets on a new turn", async function () {
@@ -10,7 +15,7 @@ describe("OpenCode touched-note status in a fresh vault", function () {
 		const stub = path.resolve(`test/fixtures/opencode-status-stub${process.platform === "win32" ? ".cmd" : ""}`);
 		const setPhase = (phase: string) => writeFileSync(stateFile, JSON.stringify({ phase }));
 		const refresh = () => browser.execute(async () => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			while (plugin.statusRefreshPending) await new Promise((resolve) => setTimeout(resolve, 25));
 			await plugin.refreshStatus();
 		});
@@ -18,7 +23,7 @@ describe("OpenCode touched-note status in a fresh vault", function () {
 			setPhase("running");
 			await browser.execute(async (stubPath: string, fixtureState: string) => {
 				const app = (window as any).app;
-				const plugin = app.plugins.plugins.opencode;
+				const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				(window as any).__statusFixturePrevious = {
 					settings: { ...plugin.settings }, source: plugin.statusSource,
 				};
@@ -46,7 +51,7 @@ describe("OpenCode touched-note status in a fresh vault", function () {
 			await expect(status).toHaveElementClass("is-idle");
 		} finally {
 			await browser.execute(async () => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				const previous = (window as any).__statusFixturePrevious;
 				if (!previous) return;
 				while (plugin.statusRefreshPending) await new Promise((resolve) => setTimeout(resolve, 25));

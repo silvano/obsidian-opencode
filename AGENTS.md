@@ -1,6 +1,6 @@
 ## Repo facts
 
-- Fork of `kriss-spy/obsidian-opencode`. Plugin id is `opencode-silvano` (`manifest.json`). Never change it back to `opencode`, and never hardcode the id; code and e2e specs derive it from the manifest.
+- Fork of `kriss-spy/obsidian-opencode`. Plugin id is `opencode-silvano` (`manifest.json`). Never change it back to `opencode`, and never hardcode the id; code and e2e specs derive it from the manifest. Specs use `pluginId` from `test/pluginId.ts` for command ids and `window.opencodeTestPluginId` for plugin lookups; upstream specs hardcode `opencode`, so fix new ones after every merge.
 - Every user-visible change in this fork must be added to the "Changes in this fork" list in `README.md`, in the same commit. Don't copy upstream documentation into the README; link to it.
 - Sync upstream with `git merge upstream/main`. Never rebase, because that rewrites published release commits and tags. On version conflicts in `package.json`/`manifest.json`/`versions.json`, keep the fork's values.
 - `README.md` is fork-only: `.gitattributes` sets `merge=ours` so upstream merges never change it. The driver must be enabled once per clone with `git config merge.ours.driver true`; check it before every upstream merge.

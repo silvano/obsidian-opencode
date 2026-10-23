@@ -1,14 +1,19 @@
 import * as path from "node:path";
 import { browser, expect } from "@wdio/globals";
+import { pluginId } from "../pluginId";
 import { WebSocket } from "ws";
 
 const stub = path.resolve(`test/fixtures/opencode-stub${process.platform === "win32" ? ".cmd" : ""}`);
+
+before(async () => {
+	await browser.execute((id: string) => { (window as any).opencodeTestPluginId = id; }, pluginId);
+});
 
 describe("[issue #46] active note line reference command", function () {
 	before(async function () {
 		await browser.execute(async (executable: string) => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = executable;
 			plugin.settings.defaultWorkingDirectory = "";
 			await plugin.saveSettings();
@@ -28,7 +33,7 @@ describe("[issue #46] active note line reference command", function () {
 			app.workspace.setActiveLeaf(leaf, { focus: true });
 			if (selected) leaf.view.editor.setSelection({ line: 2, ch: 2 }, { line: 4, ch: 0 });
 			else leaf.view.editor.setCursor({ line: 2, ch: 1 });
-			return app.plugins.plugins.opencode.vaultRoot;
+			return app.plugins.plugins[(window as any).opencodeTestPluginId].vaultRoot;
 		}, filePath, range);
 	}
 
@@ -43,7 +48,7 @@ describe("[issue #46] active note line reference command", function () {
 					const timer = setTimeout(() => reject(new Error("Line reference was not delivered")), 5_000);
 					socket.once("message", (data) => { clearTimeout(timer); resolve(data.toString()); });
 				});
-				await browser.executeObsidianCommand("opencode:reference-active-line");
+				await browser.executeObsidianCommand(`${pluginId}:reference-active-line`);
 				expect(JSON.parse(await message)).toMatchObject({
 					method: "at_mentioned",
 					params: { filePath: path.join(root, "Line reference 笔记.md"), lineStart: 3, lineEnd: selected ? 4 : 3 },
@@ -63,7 +68,7 @@ describe("[issue #46] active note line reference command", function () {
 				view.referenceTestSubscription = view.terminal.onData((data: string) => view.referenceTestData.push(data));
 			});
 			try {
-				await browser.executeObsidianCommand("opencode:reference-active-line");
+				await browser.executeObsidianCommand(`${pluginId}:reference-active-line`);
 				await browser.waitUntil(() => browser.execute(() => (window as any).app.workspace.getLeavesOfType("opencode-terminal")[0].view.referenceTestData.length > 0));
 				const data = await browser.execute(() => (window as any).app.workspace.getLeavesOfType("opencode-terminal")[0].view.referenceTestData.join(""));
 				const absolute = path.join(root, note);

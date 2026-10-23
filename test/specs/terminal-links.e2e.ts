@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { browser, expect } from "@wdio/globals";
+import { pluginId } from "../pluginId";
 import { Key } from "webdriverio";
 import multicolumnTableNotes from "../fixtures/multicolumn-table-notes";
 import sidebarTableHttp from "../fixtures/sidebar-table-http";
@@ -150,12 +151,16 @@ async function externalCalls(): Promise<string[]> {
 	return browser.execute(() => (window as any).__terminalLinkExternal);
 }
 
+before(async () => {
+	await browser.execute((id: string) => { (window as any).opencodeTestPluginId = id; }, pluginId);
+});
+
 describe("[issue #62] real xterm terminal links in an isolated vault", function () {
 	before(async function () {
-		await browser.executeObsidianCommand("opencode:close-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 		await browser.execute(async (stub: string, notePath: string) => {
 			const app = (window as any).app;
-			const plugin = app.plugins.plugins.opencode;
+			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = stub;
 			plugin.settings.defaultWorkingDirectory = "";
 			await plugin.saveSettings();
@@ -164,7 +169,7 @@ describe("[issue #62] real xterm terminal links in an isolated vault", function 
 			const file = app.vault.getFileByPath("Smoke.md");
 			if (file) await app.workspace.getLeaf(false).openFile(file);
 		}, stub, notePath);
-		await browser.executeObsidianCommand("opencode:open-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		await browser.waitUntil(() => browser.execute(() => {
 			const view = (window as any).app.workspace.getLeavesOfType("opencode-terminal")[0]?.view;
 			const buffer = view?.terminal?.buffer.active;
@@ -212,7 +217,7 @@ describe("[issue #62] real xterm terminal links in an isolated vault", function 
 
 	after(async function () {
 		await browser.execute(() => { (window as any).__terminalLinkInputListener?.dispose(); (window as any).__terminalLinkTraceCleanup?.(); });
-		await browser.executeObsidianCommand("opencode:close-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 		await browser.execute(async () => {
 			const app = (window as any).app;
 			app.workspace.getLeavesOfType("markdown").filter((leaf: any) => leaf.view.file?.path.startsWith("Terminal links/")).forEach((leaf: any) => leaf.detach());
@@ -257,7 +262,7 @@ describe("[issue #62] real xterm terminal links in an isolated vault", function 
 	});
 
 	it("opens Cmd/Ctrl-click in a new tab and accepts absolute in-vault paths", async function () {
-		const absolute = await browser.execute((notePath: string) => `${(window as any).app.plugins.plugins.opencode.vaultRoot.replace(/[\\/]+$/, "")}/${notePath}:999:999`, notePath);
+		const absolute = await browser.execute((notePath: string) => `${(window as any).app.plugins.plugins[(window as any).opencodeTestPluginId].vaultRoot.replace(/[\\/]+$/, "")}/${notePath}:999:999`, notePath);
 		const tabCount = Number(await browser.execute(() => (window as any).app.workspace.getLeavesOfType("markdown").length));
 		await render(`Side terminal: ${absolute}`);
 		await clickLink(absolute, true, true);

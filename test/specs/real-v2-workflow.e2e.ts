@@ -2,20 +2,25 @@ import * as path from "node:path";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { browser, expect } from "@wdio/globals";
+import { pluginId } from "../pluginId";
 import { resolveOpencodeExecutable } from "../../src/utils/opencodeExecutable";
+
+before(async () => {
+	await browser.execute((id: string) => { (window as any).opencodeTestPluginId = id; }, pluginId);
+});
 
 describe("Installed OpenCode V2 in an isolated vault", function () {
 	it("[real V2] focuses a revealed terminal and remains responsive after Ctrl+Z", async function () {
 		if (process.platform !== "linux" || process.env.OPENCODE_REAL_E2E !== "1") this.skip();
 		const executable = resolveOpencodeExecutable("opencode");
 		const previous = await browser.execute(() => {
-			const settings = (window as any).app.plugins.plugins.opencode.settings;
+			const settings = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId].settings;
 			return { ...settings, environmentVariables: { ...settings.environmentVariables } };
 		});
 		const profile = mkdtempSync(path.join(tmpdir(), "obsidian-opencode-real-v2-"));
 		try {
 			await browser.execute(async (opencodePath: string, profilePath: string) => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				await plugin.viewCoordinator.closeTerminal();
 				plugin.settings.opencodePath = opencodePath;
 				plugin.settings.defaultWorkingDirectory = "";
@@ -55,7 +60,7 @@ describe("Installed OpenCode V2 in an isolated vault", function () {
 				await leaf.openFile(file);
 				leaf.view.editor.focus();
 			});
-			await browser.executeObsidianCommand("opencode:open-terminal");
+			await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 			await browser.waitUntil(() => browser.execute(() => {
 				const terminal = (window as any).app.workspace.getLeavesOfType("opencode-terminal")[0]?.view.terminal;
 				return terminal?.textarea === document.activeElement;
@@ -88,7 +93,7 @@ describe("Installed OpenCode V2 in an isolated vault", function () {
 			await browser.saveScreenshot(path.resolve("test-results/obsidian/real-v2-workflow.png"));
 		} finally {
 			await browser.execute(async (settings: typeof previous) => {
-				const plugin = (window as any).app.plugins.plugins.opencode;
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 				(window as any).__suspendSubscription?.dispose();
 				delete (window as any).__suspendSubscription;
 				delete (window as any).__suspendInput;

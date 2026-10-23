@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { browser, expect } from '@wdio/globals';
+import { pluginId } from "../pluginId";
 
 const stubPath = path.resolve(`test/fixtures/opencode-stub${process.platform === 'win32' ? '.cmd' : ''}`);
 
@@ -47,10 +48,14 @@ async function waitForTerminalText(text: string): Promise<void> {
 	}
 }
 
+before(async () => {
+	await browser.execute((id: string) => { (window as any).opencodeTestPluginId = id; }, pluginId);
+});
+
 describe('[issue #57] terminal focus on explicit opening', function () {
 	before(async () => {
 		await browser.execute(async (executable: string) => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = executable;
 			plugin.settings.defaultWorkingDirectory = '';
 			await plugin.saveSettings();
@@ -58,18 +63,18 @@ describe('[issue #57] terminal focus on explicit opening', function () {
 	});
 
 	beforeEach(async () => {
-		await browser.executeObsidianCommand('opencode:close-terminal');
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 		await browser.waitUntil(() => browser.execute(() =>
 			(window as any).app.workspace.getLeavesOfType('opencode-terminal').length === 0));
 		await focusNote();
 	});
 
 	after(async () => {
-		await browser.executeObsidianCommand('opencode:close-terminal');
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 	});
 
 	it('focuses new and existing terminals through command, ribbon, status, and sidebar expansion', async () => {
-		await browser.executeObsidianCommand('opencode:open-terminal');
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		await waitForInputFocus();
 		await browser.waitUntil(async () => (await bufferText()).includes('OpenCode isolated test stub'));
 		await browser.keys(['f', 'o', 'c', 'u', 's', 'Enter']);
@@ -77,7 +82,7 @@ describe('[issue #57] terminal focus on explicit opening', function () {
 
 		const leafId = await browser.execute(() => (window as any).app.workspace.getLeavesOfType('opencode-terminal')[0].id);
 		await focusNote();
-		await browser.executeObsidianCommand('opencode:open-terminal');
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		await waitForInputFocus();
 		await focusNote();
 		await browser.$('[aria-label="Opencode terminal"]').click();
@@ -85,18 +90,18 @@ describe('[issue #57] terminal focus on explicit opening', function () {
 		await focusNote();
 		await browser.$('.opencode-status').click();
 		await waitForInputFocus();
-		await browser.executeObsidianCommand('opencode:toggle-terminal-sidebar');
+		await browser.executeObsidianCommand(`${pluginId}:toggle-terminal-sidebar`);
 		await focusNote();
-		await browser.executeObsidianCommand('opencode:toggle-terminal-sidebar');
+		await browser.executeObsidianCommand(`${pluginId}:toggle-terminal-sidebar`);
 		await waitForInputFocus();
 		expect(await browser.execute(() => (window as any).app.workspace.getLeavesOfType('opencode-terminal').map((leaf: any) => leaf.id))).toEqual([leafId]);
 	});
 
 	it('focuses restarted, new, continued, and restored sessions', async () => {
-		await browser.executeObsidianCommand('opencode:open-terminal');
+		await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 		await waitForInputFocus();
 		await browser.waitUntil(async () => (await bufferText()).includes('OpenCode isolated test stub'));
-		for (const command of ['opencode:restart-terminal', 'opencode:new-session', 'opencode:continue-last-session']) {
+		for (const command of [`${pluginId}:restart-terminal`, `${pluginId}:new-session`, `${pluginId}:continue-last-session`]) {
 			await focusNote();
 			const previousPid = await terminalPid();
 			await browser.executeObsidianCommand(command);
@@ -109,7 +114,7 @@ describe('[issue #57] terminal focus on explicit opening', function () {
 		await focusNote();
 		const previousPid = await terminalPid();
 		await browser.execute(async () => {
-			const plugin = (window as any).app.plugins.plugins.opencode;
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
 			await plugin.openTerminalWithSession('fixture-session', plugin.vaultRoot);
 		});
 		await browser.waitUntil(async () => {
@@ -126,10 +131,10 @@ describe('[issue #57] terminal focus on explicit opening', function () {
 
 	it('does not steal note focus after opening, collapsing, or closing', async () => {
 		for (const action of ['note', 'collapse', 'close']) {
-			await browser.executeObsidianCommand('opencode:open-terminal');
+			await browser.executeObsidianCommand(`${pluginId}:open-terminal`);
 			await waitForInputFocus();
-			if (action === 'collapse') await browser.executeObsidianCommand('opencode:toggle-terminal-sidebar');
-			if (action === 'close') await browser.executeObsidianCommand('opencode:close-terminal');
+			if (action === 'collapse') await browser.executeObsidianCommand(`${pluginId}:toggle-terminal-sidebar`);
+			if (action === 'close') await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 			await focusNote();
 			// Cross the old onOpen timer boundary while watching the actual editor.
 			await browser.pause(750);

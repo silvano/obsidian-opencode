@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolveOpencodeExecutable } from "../../src/utils/opencodeExecutable";
 import { browser, expect } from "@wdio/globals";
+import { pluginId } from "../pluginId";
 import { WebSocket } from "ws";
 
 const stub = path.resolve(`test/fixtures/opencode-stub${process.platform === "win32" ? ".cmd" : ""}`);
@@ -60,10 +61,14 @@ async function input(): Promise<string[]> {
 	return browser.execute(() => (window as any).__folderDropInput.filter((data: string) => data !== "\x1b[I" && data !== "\x1b[O"));
 }
 
+before(async () => {
+	await browser.execute((id: string) => { (window as any).opencodeTestPluginId = id; }, pluginId);
+});
+
 describe("folder drag and drop in an isolated vault", function () {
 	before(async function () {
 		await browser.execute(async (stub: string, folder: string) => {
-			const app = (window as any).app, plugin = app.plugins.plugins.opencode;
+			const app = (window as any).app, plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			await app.vault.createFolder(folder);
 			await app.vault.createFolder(`${folder}/子目录`);
 			await app.vault.createFolder("FolderDropPlain");
@@ -88,7 +93,7 @@ describe("folder drag and drop in an isolated vault", function () {
 
 	after(async function () {
 		await browser.execute(() => { (window as any).__folderDropSubscription?.dispose(); (window as any).__directoryDragTraceCleanup?.(); });
-		await browser.executeObsidianCommand("opencode:close-terminal");
+		await browser.executeObsidianCommand(`${pluginId}:close-terminal`);
 		await browser.execute(async (folder: string) => {
 			const app = (window as any).app;
 			for (const name of [folder, "FolderDropPlain"]) {
@@ -146,7 +151,7 @@ describe("folder drag and drop with installed OpenCode", function () {
 		const profile = mkdtempSync(path.join(tmpdir(), "obsidian-opencode-folder-real-"));
 		const directory = "Drop 笔记";
 		const previous = await browser.execute(() => {
-			const settings = (window as any).app.plugins.plugins.opencode.settings;
+			const settings = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId].settings;
 			return { ...settings, environmentVariables: { ...settings.environmentVariables } };
 		});
 		const buffer = () => browser.execute(() => {
@@ -164,7 +169,7 @@ describe("folder drag and drop with installed OpenCode", function () {
 		};
 		try {
 			await browser.execute(async (executable: string, profile: string, directory: string) => {
-				const app = (window as any).app, plugin = app.plugins.plugins.opencode;
+				const app = (window as any).app, plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				await plugin.viewCoordinator.closeTerminal();
 				await app.vault.createFolder(directory);
 				await app.vault.createFolder(`${directory}/nested`);
@@ -200,7 +205,7 @@ describe("folder drag and drop with installed OpenCode", function () {
 			await browser.execute(async (payload: string) => {
 				const { settings, directory } = JSON.parse(payload);
 				(window as any).__directoryDragTraceCleanup?.();
-				const app = (window as any).app, plugin = app.plugins.plugins.opencode;
+				const app = (window as any).app, plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 				await plugin.viewCoordinator.closeTerminal();
 				const folder = app.vault.getAbstractFileByPath(directory);
 				if (folder) await app.vault.delete(folder, true);
