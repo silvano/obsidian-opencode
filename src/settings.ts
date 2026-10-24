@@ -8,7 +8,12 @@ export interface OpencodePluginSettings {
 	terminalFontFamily: string;
 	newSessionArgs: string;
 	shiftEnterNewline: boolean;
+	// Upstream's detection also links vault notes and wrapped TUI paths, but
+	// can block Obsidian for seconds on pointer moves (see README).
+	terminalLinkDetection: TerminalLinkDetection;
 }
+
+export type TerminalLinkDetection = "simple" | "upstream";
 
 export const DEFAULT_SETTINGS: OpencodePluginSettings = {
 	opencodePath: "",
@@ -18,4 +23,5 @@ export const DEFAULT_SETTINGS: OpencodePluginSettings = {
 	terminalFontFamily: "monospace",
 	newSessionArgs: "",
 	shiftEnterNewline: false,
+	terminalLinkDetection: "simple",
 };

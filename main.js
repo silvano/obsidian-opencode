@@ -6204,6 +6204,129 @@ var require_addon_fit = __commonJS({
   }
 });
 
+// node_modules/@xterm/addon-web-links/lib/addon-web-links.js
+var require_addon_web_links = __commonJS({
+  "node_modules/@xterm/addon-web-links/lib/addon-web-links.js"(exports2, module2) {
+    !(function(e, t) {
+      "object" == typeof exports2 && "object" == typeof module2 ? module2.exports = t() : "function" == typeof define && define.amd ? define([], t) : "object" == typeof exports2 ? exports2.WebLinksAddon = t() : e.WebLinksAddon = t();
+    })(self, (() => (() => {
+      "use strict";
+      var e = { 6: (e2, t2) => {
+        function n2(e3) {
+          try {
+            const t3 = new URL(e3), n3 = t3.password && t3.username ? `${t3.protocol}//${t3.username}:${t3.password}@${t3.host}` : t3.username ? `${t3.protocol}//${t3.username}@${t3.host}` : `${t3.protocol}//${t3.host}`;
+            return e3.toLocaleLowerCase().startsWith(n3.toLocaleLowerCase());
+          } catch (e4) {
+            return false;
+          }
+        }
+        Object.defineProperty(t2, "__esModule", { value: true }), t2.LinkComputer = t2.WebLinkProvider = void 0, t2.WebLinkProvider = class {
+          constructor(e3, t3, n3, o3 = {}) {
+            this._terminal = e3, this._regex = t3, this._handler = n3, this._options = o3;
+          }
+          provideLinks(e3, t3) {
+            const n3 = o2.computeLink(e3, this._regex, this._terminal, this._handler);
+            t3(this._addCallbacks(n3));
+          }
+          _addCallbacks(e3) {
+            return e3.map(((e4) => (e4.leave = this._options.leave, e4.hover = (t3, n3) => {
+              if (this._options.hover) {
+                const { range: o3 } = e4;
+                this._options.hover(t3, n3, o3);
+              }
+            }, e4)));
+          }
+        };
+        class o2 {
+          static computeLink(e3, t3, r, i) {
+            const s = new RegExp(t3.source, (t3.flags || "") + "g"), [a, c] = o2._getWindowedLineStrings(e3 - 1, r), l = a.join("");
+            let d;
+            const p = [];
+            for (; d = s.exec(l); ) {
+              const e4 = d[0];
+              if (!n2(e4)) continue;
+              const [t4, s2] = o2._mapStrIdx(r, c, 0, d.index), [a2, l2] = o2._mapStrIdx(r, t4, s2, e4.length);
+              if (-1 === t4 || -1 === s2 || -1 === a2 || -1 === l2) continue;
+              const h = { start: { x: s2 + 1, y: t4 + 1 }, end: { x: l2, y: a2 + 1 } };
+              p.push({ range: h, text: e4, activate: i });
+            }
+            return p;
+          }
+          static _getWindowedLineStrings(e3, t3) {
+            let n3, o3 = e3, r = e3, i = 0, s = "";
+            const a = [];
+            if (n3 = t3.buffer.active.getLine(e3)) {
+              const e4 = n3.translateToString(true);
+              if (n3.isWrapped && " " !== e4[0]) {
+                for (i = 0; (n3 = t3.buffer.active.getLine(--o3)) && i < 2048 && (s = n3.translateToString(true), i += s.length, a.push(s), n3.isWrapped && -1 === s.indexOf(" ")); ) ;
+                a.reverse();
+              }
+              for (a.push(e4), i = 0; (n3 = t3.buffer.active.getLine(++r)) && n3.isWrapped && i < 2048 && (s = n3.translateToString(true), i += s.length, a.push(s), -1 === s.indexOf(" ")); ) ;
+            }
+            return [a, o3];
+          }
+          static _mapStrIdx(e3, t3, n3, o3) {
+            const r = e3.buffer.active, i = r.getNullCell();
+            let s = n3;
+            for (; o3; ) {
+              const e4 = r.getLine(t3);
+              if (!e4) return [-1, -1];
+              for (let n4 = s; n4 < e4.length; ++n4) {
+                e4.getCell(n4, i);
+                const s2 = i.getChars();
+                if (i.getWidth() && (o3 -= s2.length || 1, n4 === e4.length - 1 && "" === s2)) {
+                  const e5 = r.getLine(t3 + 1);
+                  e5 && e5.isWrapped && (e5.getCell(0, i), 2 === i.getWidth() && (o3 += 1));
+                }
+                if (o3 < 0) return [t3, n4];
+              }
+              t3++, s = 0;
+            }
+            return [t3, s];
+          }
+        }
+        t2.LinkComputer = o2;
+      } }, t = {};
+      function n(o2) {
+        var r = t[o2];
+        if (void 0 !== r) return r.exports;
+        var i = t[o2] = { exports: {} };
+        return e[o2](i, i.exports, n), i.exports;
+      }
+      var o = {};
+      return (() => {
+        var e2 = o;
+        Object.defineProperty(e2, "__esModule", { value: true }), e2.WebLinksAddon = void 0;
+        const t2 = n(6), r = /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`]*[^\s"':,.!?{}|\\\^~\[\]`()<>]/;
+        function i(e3, t3) {
+          const n2 = window.open();
+          if (n2) {
+            try {
+              n2.opener = null;
+            } catch (e4) {
+            }
+            n2.location.href = t3;
+          } else console.warn("Opening link blocked as opener could not be cleared");
+        }
+        e2.WebLinksAddon = class {
+          constructor(e3 = i, t3 = {}) {
+            this._handler = e3, this._options = t3;
+          }
+          activate(e3) {
+            this._terminal = e3;
+            const n2 = this._options, o2 = n2.urlRegex || r;
+            this._linkProvider = this._terminal.registerLinkProvider(new t2.WebLinkProvider(this._terminal, o2, this._handler, n2));
+          }
+          dispose() {
+            var _a;
+            (_a = this._linkProvider) == null ? void 0 : _a.dispose();
+          }
+        };
+      })(), o;
+    })()));
+  }
+});
+
 // node_modules/@xterm/addon-canvas/lib/addon-canvas.js
 var require_addon_canvas = __commonJS({
   "node_modules/@xterm/addon-canvas/lib/addon-canvas.js"(exports2, module2) {
@@ -20053,7 +20176,8 @@ var DEFAULT_SETTINGS = {
   terminalFontSize: 14,
   terminalFontFamily: "monospace",
   newSessionArgs: "",
-  shiftEnterNewline: false
+  shiftEnterNewline: false,
+  terminalLinkDetection: "simple"
 };
 
 // src/settingsTab.ts
@@ -20139,6 +20263,11 @@ var environmentVariableExample = [
   "GIT_EDITOR=/usr/bin/nvim",
   "OPENCODE_DISABLE_TERMINAL_TITLE=1"
 ].join("\n");
+var terminalLinkDetectionOptions = {
+  simple: "Simple (web links only)",
+  upstream: "Upstream (web links and notes)"
+};
+var terminalLinkDetectionDesc = "Simple opens http(s) links with Ctrl+click (Cmd+click on macOS). Upstream also links vault notes and wrapped paths, but can freeze Obsidian on mouse moves. Applies to newly opened terminals.";
 var OpencodeSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -20192,6 +20321,11 @@ var OpencodeSettingTab = class extends import_obsidian.PluginSettingTab {
         name: "Shift + Enter for newline",
         desc: "When enabled, Shift + Enter inserts a newline. The default OpenCode shortcut is Alt + Enter.",
         control: { type: "toggle", key: "shiftEnterNewline" }
+      },
+      {
+        name: "Terminal link detection",
+        desc: terminalLinkDetectionDesc,
+        control: { type: "dropdown", key: "terminalLinkDetection", options: terminalLinkDetectionOptions }
       }
     ];
   }
@@ -20211,6 +20345,8 @@ var OpencodeSettingTab = class extends import_obsidian.PluginSettingTab {
         return this.plugin.settings.newSessionArgs;
       case "shiftEnterNewline":
         return this.plugin.settings.shiftEnterNewline;
+      case "terminalLinkDetection":
+        return this.plugin.settings.terminalLinkDetection;
       default:
         return void 0;
     }
@@ -20237,6 +20373,9 @@ var OpencodeSettingTab = class extends import_obsidian.PluginSettingTab {
         break;
       case "shiftEnterNewline":
         if (typeof value === "boolean") this.plugin.settings.shiftEnterNewline = value;
+        break;
+      case "terminalLinkDetection":
+        if (value === "simple" || value === "upstream") this.plugin.settings.terminalLinkDetection = value;
         break;
       default:
         return;
@@ -20296,6 +20435,13 @@ var OpencodeSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    new import_obsidian.Setting(containerEl).setName("Terminal link detection").setDesc(terminalLinkDetectionDesc).addDropdown(
+      (dropdown) => dropdown.addOptions(terminalLinkDetectionOptions).setValue(this.plugin.settings.terminalLinkDetection).onChange(async (value) => {
+        if (value !== "simple" && value !== "upstream") return;
+        this.plugin.settings.terminalLinkDetection = value;
+        await this.plugin.saveSettings();
+      })
+    );
   }
 };
 
@@ -20304,6 +20450,7 @@ var import_node_module = require("node:module");
 var import_obsidian4 = require("obsidian");
 var import_xterm = __toESM(require_xterm());
 var import_addon_fit = __toESM(require_addon_fit());
+var import_addon_web_links = __toESM(require_addon_web_links());
 
 // src/modules/controlCharacters.ts
 function hasControlCharacter(text) {
@@ -21013,6 +21160,27 @@ var TerminalLinks = class {
     for (const cleanup of this.cleanups.splice(0)) cleanup();
   }
 };
+
+// src/modules/simpleTerminalLinks.ts
+function isLinkActivation(event, platform) {
+  return platform === "darwin" ? event.metaKey : event.ctrlKey;
+}
+function isOpenableUrl(uri) {
+  try {
+    const { protocol } = new URL(uri);
+    return protocol === "http:" || protocol === "https:";
+  } catch (e) {
+    return false;
+  }
+}
+function linkHint(platform) {
+  return `${platform === "darwin" ? "Cmd" : "Ctrl"}+click to open link`;
+}
+function createTerminalLinkHandler(open, platform) {
+  return (event, uri) => {
+    if (isLinkActivation(event, platform) && isOpenableUrl(uri)) open(uri);
+  };
+}
 
 // src/views/opencodeTerminalView.ts
 var import_addon_canvas = __toESM(require_addon_canvas());
@@ -22868,6 +23036,25 @@ function oscChannels(color) {
 function themeModeReport(dark) {
   return dark ? "\x1B[?997;1n" : "\x1B[?997;2n";
 }
+var HOST_THEME_REPORT_DELAYS = [0, 300, 1e3, 3e3, 8e3];
+var HostThemeReporter = class {
+  constructor(report, host) {
+    this.report = report;
+    this.host = host;
+    this.timers = [];
+  }
+  schedule() {
+    this.cancel();
+    this.timers = HOST_THEME_REPORT_DELAYS.map((delay) => this.host.setTimeout(() => this.report(), delay));
+  }
+  dispose() {
+    this.cancel();
+  }
+  cancel() {
+    for (const timer of this.timers) this.host.clearTimeout(timer);
+    this.timers = [];
+  }
+};
 function win32InputSequence(text) {
   return [...text].map((char) => `\x1B[0;0;${char.charCodeAt(0)};1;0;1_`).join("");
 }
@@ -22941,6 +23128,53 @@ var OpencodeTerminalView = class _OpencodeTerminalView extends import_obsidian4.
     const container = this.container;
     if (!(container == null ? void 0 : container.isConnected) || container.clientWidth === 0 || container.clientHeight === 0) return;
     (_a = this.terminal) == null ? void 0 : _a.focus();
+  }
+  // The fork's pre-merge detection: http(s) only, via xterm's web-links addon
+  // and OSC 8, so pointer moves never scan the buffer around the cursor.
+  attachSimpleTerminalLinks(terminal, termContainer, openExternal) {
+    const openLink = createTerminalLinkHandler((uri) => {
+      openExternal(uri).catch((error) => {
+        console.warn("Could not open terminal link", error);
+        new import_obsidian4.Notice("Could not open terminal link");
+      });
+    }, process.platform);
+    const showLinkHint = () => termContainer.setAttribute("title", linkHint(process.platform));
+    const hideLinkHint = () => termContainer.removeAttribute("title");
+    terminal.options.linkHandler = { activate: openLink, hover: showLinkHint, leave: hideLinkHint };
+    terminal.loadAddon(new import_addon_web_links.WebLinksAddon(openLink, { hover: showLinkHint, leave: hideLinkHint }));
+  }
+  attachUpstreamTerminalLinks(terminal, termContainer, wslDistro, openExternal) {
+    const terminalLinks = new TerminalLinks(terminal, {
+      vaultRoot: this.plugin.vaultRoot,
+      wslDistro,
+      hasNote: (path11) => {
+        var _a;
+        return Boolean(((_a = this.app.vault.getFileByPath(path11)) == null ? void 0 : _a.extension.toLowerCase()) === "md");
+      },
+      isModEvent: (event) => Boolean(import_obsidian4.Keymap.isModEvent(event)),
+      openExternal,
+      openNote: async (target, event) => {
+        var _a;
+        const file = this.app.vault.getFileByPath(target.path);
+        if (!file) return;
+        const leaf = this.app.workspace.getLeaf(import_obsidian4.Keymap.isModEvent(event));
+        await leaf.openFile(file, { active: true, state: target.line ? { mode: "source" } : void 0 });
+        if (target.line && leaf.view instanceof import_obsidian4.MarkdownView) {
+          const editor = leaf.view.editor;
+          const line = Math.min(target.line - 1, editor.lineCount() - 1);
+          const ch = Math.min(((_a = target.column) != null ? _a : 1) - 1, editor.getLine(line).length);
+          editor.setCursor({ line, ch });
+          editor.scrollIntoView({ from: { line, ch }, to: { line, ch } }, true);
+        }
+      },
+      onError: (error) => {
+        console.warn("Could not open terminal link", error);
+        new import_obsidian4.Notice("Could not open terminal link");
+      }
+    });
+    terminalLinks.attach(termContainer);
+    this.terminalLinks = terminalLinks;
+    this.register(() => terminalLinks.dispose());
   }
   async onOpen() {
     var _a, _b;
@@ -23017,40 +23251,15 @@ var OpencodeTerminalView = class _OpencodeTerminalView extends import_obsidian4.
       const fallback = osc === 10 ? dark ? "#d4d4d4" : "#333333" : dark ? "#1e1e1e" : "#ffffff";
       return (_b2 = (_a2 = terminalColorQueryResponse(osc, value)) != null ? _a2 : terminalColorQueryResponse(osc, fallback)) != null ? _b2 : "";
     };
-    const terminalLinks = new TerminalLinks(terminal, {
-      vaultRoot: this.plugin.vaultRoot,
-      wslDistro: terminalEnvironment.WSL_DISTRO_NAME,
-      hasNote: (path11) => {
-        var _a2;
-        return Boolean(((_a2 = this.app.vault.getFileByPath(path11)) == null ? void 0 : _a2.extension.toLowerCase()) === "md");
-      },
-      isModEvent: (event) => Boolean(import_obsidian4.Keymap.isModEvent(event)),
-      openExternal: (url) => {
-        const electron = (0, import_node_module.createRequire)(__filename)("electron");
-        return electron.shell.openExternal(url);
-      },
-      openNote: async (target, event) => {
-        var _a2;
-        const file = this.app.vault.getFileByPath(target.path);
-        if (!file) return;
-        const leaf = this.app.workspace.getLeaf(import_obsidian4.Keymap.isModEvent(event));
-        await leaf.openFile(file, { active: true, state: target.line ? { mode: "source" } : void 0 });
-        if (target.line && leaf.view instanceof import_obsidian4.MarkdownView) {
-          const editor = leaf.view.editor;
-          const line = Math.min(target.line - 1, editor.lineCount() - 1);
-          const ch = Math.min(((_a2 = target.column) != null ? _a2 : 1) - 1, editor.getLine(line).length);
-          editor.setCursor({ line, ch });
-          editor.scrollIntoView({ from: { line, ch }, to: { line, ch } }, true);
-        }
-      },
-      onError: (error) => {
-        console.warn("Could not open terminal link", error);
-        new import_obsidian4.Notice("Could not open terminal link");
-      }
-    });
-    terminalLinks.attach(termContainer);
-    this.terminalLinks = terminalLinks;
-    this.register(() => terminalLinks.dispose());
+    const openExternal = (url) => {
+      const electron = (0, import_node_module.createRequire)(__filename)("electron");
+      return electron.shell.openExternal(url);
+    };
+    if (this.plugin.settings.terminalLinkDetection === "simple") {
+      this.attachSimpleTerminalLinks(terminal, termContainer, openExternal);
+    } else {
+      this.attachUpstreamTerminalLinks(terminal, termContainer, terminalEnvironment.WSL_DISTRO_NAME, openExternal);
+    }
     for (const osc of [10, 11]) {
       const handler = terminal.parser.registerOscHandler(osc, (data) => {
         if (data !== "?") return false;
@@ -23064,11 +23273,15 @@ var OpencodeTerminalView = class _OpencodeTerminalView extends import_obsidian4.
       const colors = hostColorResponse(10) + hostColorResponse(11);
       this.ptySession.writeStdin(themeModeReport(hostIsDark()) + (process.platform === "win32" ? win32InputSequence(colors) : colors));
     };
+    const hostThemeReporter = new HostThemeReporter(reportHostTheme, termContainer.win);
     const themeModeHandler = terminal.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
-      if (params.some((param) => param === 2031)) window.setTimeout(reportHostTheme, 0);
+      if (params.some((param) => param === 2031)) hostThemeReporter.schedule();
       return false;
     });
-    this.register(() => themeModeHandler.dispose());
+    this.register(() => {
+      themeModeHandler.dispose();
+      hostThemeReporter.dispose();
+    });
     let scrollbarRail = null;
     let scrollbarThumb = null;
     if (process.platform === "win32") {

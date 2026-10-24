@@ -55,6 +55,7 @@ if (args[0] === "--help") {
 	} else {
 		console.log(`OpenCode isolated test stub ARGS:${JSON.stringify(args)}`);
 	}
+	if (process.env.OBSIDIAN_OPENCODE_PRINT_URL) console.log(`Docs: ${process.env.OBSIDIAN_OPENCODE_PRINT_URL}`);
 	if (process.env.OBSIDIAN_OPENCODE_TEST_VARIABLE !== undefined) {
 		const digest = createHash("sha256")
 			.update(process.env.OBSIDIAN_OPENCODE_TEST_VARIABLE)
@@ -66,6 +67,22 @@ if (args[0] === "--help") {
 		setTimeout(() => console.log(`SIZE:${process.stdout.columns}x${process.stdout.rows}`), 100);
 	}
 	process.stdin.setEncoding("utf8");
-	process.stdin.on("data", (data) => process.stdout.write(`INPUT:${JSON.stringify(data)}\n`));
+	if (process.env.OBSIDIAN_OPENCODE_THEME_MODE) {
+		// Behave like OpenTUI: enable DEC mode 2031 and count the host's reports.
+		let received = "";
+		let reports = 0;
+		process.stdin.setRawMode?.(true);
+		process.stdin.on("data", (data) => {
+			received += data;
+			const count = received.split("[?997;").length - 1;
+			if (count > reports) {
+				reports = count;
+				process.stdout.write(`THEME_REPORTS:${reports}\r\n`);
+			}
+		});
+		process.stdout.write("\x1b[?2031h");
+	} else {
+		process.stdin.on("data", (data) => process.stdout.write(`INPUT:${JSON.stringify(data)}\n`));
+	}
 	process.stdin.resume();
 }

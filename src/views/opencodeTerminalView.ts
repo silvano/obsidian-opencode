@@ -2,7 +2,9 @@ import { createRequire } from "node:module";
 import { ItemView, Keymap, MarkdownView, Notice, WorkspaceLeaf } from "obsidian";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { TerminalLinks } from "../modules/terminalLinks";
+import { createTerminalLinkHandler, linkHint } from "../modules/simpleTerminalLinks";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { ImageAddon } from "@xterm/addon-image";
@@ -35,6 +37,7 @@ import { mergeEnvironmentVariables } from "../utils/environment";
 import { OpencodeClient, OpencodeError } from "../utils/opencode";
 import { createWslWindowsClipboard } from "../modules/wslWindowsClipboard";
 import {
+	HostThemeReporter,
 	isOpenCodeThemePicker,
 	terminalColorQueryResponse,
 	ThemePreviewInputBatcher,
@@ -119,6 +122,52 @@ export class OpencodeTerminalView extends ItemView {
 		const container = this.container;
 		if (!container?.isConnected || container.clientWidth === 0 || container.clientHeight === 0) return;
 		this.terminal?.focus();
+	}
+
+	// The fork's pre-merge detection: http(s) only, via xterm's web-links addon
+	// and OSC 8, so pointer moves never scan the buffer around the cursor.
+	private attachSimpleTerminalLinks(terminal: Terminal, termContainer: HTMLElement, openExternal: (url: string) => Promise<void>): void {
+		const openLink = createTerminalLinkHandler((uri) => {
+			openExternal(uri).catch((error: unknown) => {
+				console.warn("Could not open terminal link", error);
+				new Notice("Could not open terminal link");
+			});
+		}, process.platform);
+		const showLinkHint = () => termContainer.setAttribute("title", linkHint(process.platform));
+		const hideLinkHint = () => termContainer.removeAttribute("title");
+		terminal.options.linkHandler = { activate: openLink, hover: showLinkHint, leave: hideLinkHint };
+		terminal.loadAddon(new WebLinksAddon(openLink, { hover: showLinkHint, leave: hideLinkHint }));
+	}
+
+	private attachUpstreamTerminalLinks(terminal: Terminal, termContainer: HTMLElement, wslDistro: string | undefined,
+		openExternal: (url: string) => Promise<void>): void {
+		const terminalLinks = new TerminalLinks(terminal, {
+			vaultRoot: this.plugin.vaultRoot,
+			wslDistro,
+			hasNote: path => Boolean(this.app.vault.getFileByPath(path)?.extension.toLowerCase() === "md"),
+			isModEvent: event => Boolean(Keymap.isModEvent(event)),
+			openExternal,
+			openNote: async (target, event) => {
+				const file = this.app.vault.getFileByPath(target.path);
+				if (!file) return;
+				const leaf = this.app.workspace.getLeaf(Keymap.isModEvent(event));
+				await leaf.openFile(file, { active: true, state: target.line ? { mode: "source" } : undefined });
+				if (target.line && leaf.view instanceof MarkdownView) {
+					const editor = leaf.view.editor;
+					const line = Math.min(target.line - 1, editor.lineCount() - 1);
+					const ch = Math.min((target.column ?? 1) - 1, editor.getLine(line).length);
+					editor.setCursor({ line, ch });
+					editor.scrollIntoView({ from: { line, ch }, to: { line, ch } }, true);
+				}
+			},
+			onError: error => {
+				console.warn("Could not open terminal link", error);
+				new Notice("Could not open terminal link");
+			},
+		});
+		terminalLinks.attach(termContainer);
+		this.terminalLinks = terminalLinks;
+		this.register(() => terminalLinks.dispose());
 	}
 
 	async onOpen() {
@@ -210,36 +259,15 @@ export class OpencodeTerminalView extends ItemView {
 				: (dark ? "#1e1e1e" : "#ffffff");
 			return terminalColorQueryResponse(osc, value) ?? terminalColorQueryResponse(osc, fallback) ?? "";
 		};
-		const terminalLinks = new TerminalLinks(terminal, {
-			vaultRoot: this.plugin.vaultRoot,
-			wslDistro: terminalEnvironment.WSL_DISTRO_NAME,
-			hasNote: path => Boolean(this.app.vault.getFileByPath(path)?.extension.toLowerCase() === "md"),
-			isModEvent: event => Boolean(Keymap.isModEvent(event)),
-			openExternal: url => {
-				const electron = createRequire(__filename)("electron") as { shell: { openExternal(url: string): Promise<void> } };
-				return electron.shell.openExternal(url);
-			},
-			openNote: async (target, event) => {
-				const file = this.app.vault.getFileByPath(target.path);
-				if (!file) return;
-				const leaf = this.app.workspace.getLeaf(Keymap.isModEvent(event));
-				await leaf.openFile(file, { active: true, state: target.line ? { mode: "source" } : undefined });
-				if (target.line && leaf.view instanceof MarkdownView) {
-					const editor = leaf.view.editor;
-					const line = Math.min(target.line - 1, editor.lineCount() - 1);
-					const ch = Math.min((target.column ?? 1) - 1, editor.getLine(line).length);
-					editor.setCursor({ line, ch });
-					editor.scrollIntoView({ from: { line, ch }, to: { line, ch } }, true);
-				}
-			},
-			onError: error => {
-				console.warn("Could not open terminal link", error);
-				new Notice("Could not open terminal link");
-			},
-		});
-		terminalLinks.attach(termContainer);
-		this.terminalLinks = terminalLinks;
-		this.register(() => terminalLinks.dispose());
+		const openExternal = (url: string) => {
+			const electron = createRequire(__filename)("electron") as { shell: { openExternal(url: string): Promise<void> } };
+			return electron.shell.openExternal(url);
+		};
+		if (this.plugin.settings.terminalLinkDetection === "simple") {
+			this.attachSimpleTerminalLinks(terminal, termContainer, openExternal);
+		} else {
+			this.attachUpstreamTerminalLinks(terminal, termContainer, terminalEnvironment.WSL_DISTRO_NAME, openExternal);
+		}
 		// OpenCode changes xterm's OSC colors while previewing. Its `system` theme
 		// must still query Obsidian's host palette, not the preceding preview.
 		for (const osc of [10, 11] as const) {
@@ -261,11 +289,15 @@ export class OpencodeTerminalView extends ItemView {
 			this.ptySession.writeStdin(themeModeReport(hostIsDark()) +
 				(process.platform === "win32" ? win32InputSequence(colors) : colors));
 		};
+		const hostThemeReporter = new HostThemeReporter(reportHostTheme, termContainer.win);
 		const themeModeHandler = terminal.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
-			if (params.some((param) => param === 2031)) window.setTimeout(reportHostTheme, 0);
+			if (params.some((param) => param === 2031)) hostThemeReporter.schedule();
 			return false;
 		});
-		this.register(() => themeModeHandler.dispose());
+		this.register(() => {
+			themeModeHandler.dispose();
+			hostThemeReporter.dispose();
+		});
 		let scrollbarRail: HTMLElement | null = null;
 		let scrollbarThumb: HTMLElement | null = null;
 		if (process.platform === "win32") {

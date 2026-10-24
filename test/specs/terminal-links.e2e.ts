@@ -163,6 +163,8 @@ describe("[issue #62] real xterm terminal links in an isolated vault", function 
 			const plugin = app.plugins.plugins[(window as any).opencodeTestPluginId];
 			plugin.settings.opencodePath = stub;
 			plugin.settings.defaultWorkingDirectory = "";
+			// The fork defaults to simple links; this spec covers upstream's provider.
+			plugin.settings.terminalLinkDetection = "upstream";
 			await plugin.saveSettings();
 			if (!app.vault.getAbstractFileByPath("Terminal links")) await app.vault.createFolder("Terminal links");
 			if (!app.vault.getFileByPath(notePath)) await app.vault.create(notePath, "first\nsecond\nthird line for cursor\nfourth\n");

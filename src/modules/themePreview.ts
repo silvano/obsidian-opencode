@@ -98,6 +98,31 @@ export function themeModeReport(dark: boolean): string {
 	return dark ? "\x1b[?997;1n" : "\x1b[?997;2n";
 }
 
+// OpenTUI accepts the OSC replies for only 250 ms after a mode 2031 report.
+// ConPTY can deliver them later while the machine is busy (cold boot), and
+// OpenCode then stays on its dark fallback, so the report is repeated.
+export const HOST_THEME_REPORT_DELAYS = [0, 300, 1000, 3000, 8000] as const;
+
+export class HostThemeReporter {
+	private timers: number[] = [];
+
+	constructor(private readonly report: () => void, private readonly host: Window) {}
+
+	schedule(): void {
+		this.cancel();
+		this.timers = HOST_THEME_REPORT_DELAYS.map((delay) => this.host.setTimeout(() => this.report(), delay));
+	}
+
+	dispose(): void {
+		this.cancel();
+	}
+
+	private cancel(): void {
+		for (const timer of this.timers) this.host.clearTimeout(timer);
+		this.timers = [];
+	}
+}
+
 // ConPTY drops OSC sequences written as plain VT input. Sent as win32-input-mode
 // key events, each character reaches the child unparsed.
 export function win32InputSequence(text: string): string {

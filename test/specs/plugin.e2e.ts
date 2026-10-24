@@ -369,6 +369,68 @@ describe("OpenCode plugin in a fresh vault", function () {
 		}
 	});
 
+	it("uses the simple web-link detection by default", async function () {
+		const url = "https://example.com/docs?page=1";
+		await browser.execute(async (url: string) => {
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
+			plugin.settings.environmentVariables = { ...plugin.settings.environmentVariables, OBSIDIAN_OPENCODE_PRINT_URL: url };
+			await plugin.saveSettings();
+		}, url);
+		try {
+			await browser.executeObsidianCommand(`${pluginId}:restart-terminal`);
+			await waitForTerminalText(`Docs: ${url}`);
+			const result = await browser.execute(() => {
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
+				const view = (window as any).app.workspace.getLeavesOfType("opencode-terminal")[0].view;
+				const buffer = view.terminal.buffer.active;
+				let row = 0;
+				for (let y = 0; y < buffer.length; y++) if (buffer.getLine(y)?.translateToString(true).startsWith("Docs: ")) row = y + 1;
+				const providers = view.terminal._core._linkProviderService.linkProviders;
+				return new Promise<{ setting: string; upstream: boolean; links: string[] }>((resolve) => {
+					const links: string[] = [];
+					let pending = providers.length;
+					if (!pending) resolve({ setting: plugin.settings.terminalLinkDetection, upstream: Boolean(view.terminalLinks), links });
+					for (const provider of providers) provider.provideLinks(row, (found: any[] | undefined) => {
+						for (const link of found ?? []) links.push(link.text);
+						if (--pending === 0) resolve({ setting: plugin.settings.terminalLinkDetection, upstream: Boolean(view.terminalLinks), links });
+					});
+				});
+			});
+			expect(result.setting).toBe("simple");
+			expect(result.upstream).toBe(false);
+			expect(result.links).toContain(url);
+		} finally {
+			await browser.execute(async () => {
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
+				delete plugin.settings.environmentVariables.OBSIDIAN_OPENCODE_PRINT_URL;
+				await plugin.saveSettings();
+			});
+		}
+	});
+
+	it("repeats host theme reports after OpenCode enables DEC mode 2031", async function () {
+		await browser.execute(async () => {
+			const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
+			plugin.settings.environmentVariables = {
+				...plugin.settings.environmentVariables,
+				OBSIDIAN_OPENCODE_THEME_MODE: "1",
+			};
+			await plugin.saveSettings();
+		});
+		try {
+			await browser.executeObsidianCommand(`${pluginId}:restart-terminal`);
+			await waitForTerminalText("THEME_REPORTS:3");
+		} finally {
+			await browser.execute(async () => {
+				const plugin = (window as any).app.plugins.plugins[(window as any).opencodeTestPluginId];
+				delete plugin.settings.environmentVariables.OBSIDIAN_OPENCODE_THEME_MODE;
+				await plugin.saveSettings();
+			});
+			await browser.executeObsidianCommand(`${pluginId}:restart-terminal`);
+			await waitForTerminalText("OpenCode isolated test stub");
+		}
+	});
+
 	it("[issue #33] ignores Caps Lock while preserving ordinary terminal input", async function () {
 		await browser.execute(async () => {
 			const app = (window as any).app;

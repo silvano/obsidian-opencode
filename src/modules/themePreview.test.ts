@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	HOST_THEME_REPORT_DELAYS,
+	HostThemeReporter,
 	isOpenCodeThemePicker,
 	terminalColorQueryResponse,
 	ThemePreviewInputBatcher,
@@ -36,6 +38,32 @@ describe("theme preview integration", () => {
 	it("reports host theme changes as DEC mode 2031 notifications", () => {
 		expect(themeModeReport(true)).toBe("\x1b[?997;1n");
 		expect(themeModeReport(false)).toBe("\x1b[?997;2n");
+	});
+
+	it("repeats host theme reports so a late ConPTY delivery still lands", () => {
+		vi.useFakeTimers();
+		const report = vi.fn();
+		const reporter = new HostThemeReporter(report, global as unknown as Window);
+		reporter.schedule();
+		vi.advanceTimersByTime(0);
+		expect(report).toHaveBeenCalledTimes(1);
+		vi.advanceTimersByTime(HOST_THEME_REPORT_DELAYS[HOST_THEME_REPORT_DELAYS.length - 1]);
+		expect(report).toHaveBeenCalledTimes(HOST_THEME_REPORT_DELAYS.length);
+	});
+
+	it("restarts the report schedule on re-enable and stops on dispose", () => {
+		vi.useFakeTimers();
+		const report = vi.fn();
+		const reporter = new HostThemeReporter(report, global as unknown as Window);
+		reporter.schedule();
+		vi.advanceTimersByTime(500);
+		expect(report).toHaveBeenCalledTimes(2);
+		reporter.schedule();
+		vi.advanceTimersByTime(0);
+		expect(report).toHaveBeenCalledTimes(3);
+		reporter.dispose();
+		vi.runAllTimers();
+		expect(report).toHaveBeenCalledTimes(3);
 	});
 
 	it("encodes text as win32-input-mode key events for ConPTY", () => {

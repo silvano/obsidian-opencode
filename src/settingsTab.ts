@@ -10,6 +10,12 @@ const environmentVariableExample = [
 	"OPENCODE_DISABLE_TERMINAL_TITLE=1",
 ].join("\n");
 
+const terminalLinkDetectionOptions: Record<string, string> = {
+	simple: "Simple (web links only)",
+	upstream: "Upstream (web links and notes)",
+};
+const terminalLinkDetectionDesc = "Simple opens http(s) links with Ctrl+click (Cmd+click on macOS). Upstream also links vault notes and wrapped paths, but can freeze Obsidian on mouse moves. Applies to newly opened terminals.";
+
 export class OpencodeSettingTab extends PluginSettingTab {
 	plugin: OpencodePlugin;
 
@@ -67,6 +73,11 @@ export class OpencodeSettingTab extends PluginSettingTab {
 				desc: "When enabled, Shift + Enter inserts a newline. The default OpenCode shortcut is Alt + Enter.",
 				control: { type: "toggle", key: "shiftEnterNewline" },
 			},
+			{
+				name: "Terminal link detection",
+				desc: terminalLinkDetectionDesc,
+				control: { type: "dropdown", key: "terminalLinkDetection", options: terminalLinkDetectionOptions },
+			},
 		];
 	}
 
@@ -79,6 +90,7 @@ export class OpencodeSettingTab extends PluginSettingTab {
 			case "terminalFontFamily": return this.plugin.settings.terminalFontFamily;
 			case "newSessionArgs": return this.plugin.settings.newSessionArgs;
 			case "shiftEnterNewline": return this.plugin.settings.shiftEnterNewline;
+			case "terminalLinkDetection": return this.plugin.settings.terminalLinkDetection;
 			default: return undefined;
 		}
 	}
@@ -105,6 +117,9 @@ export class OpencodeSettingTab extends PluginSettingTab {
 				break;
 			case "shiftEnterNewline":
 				if (typeof value === "boolean") this.plugin.settings.shiftEnterNewline = value;
+				break;
+			case "terminalLinkDetection":
+				if (value === "simple" || value === "upstream") this.plugin.settings.terminalLinkDetection = value;
 				break;
 			default:
 				return;
@@ -210,6 +225,20 @@ export class OpencodeSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.shiftEnterNewline)
 					.onChange(async (value) => {
 						this.plugin.settings.shiftEnterNewline = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Terminal link detection")
+			.setDesc(terminalLinkDetectionDesc)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOptions(terminalLinkDetectionOptions)
+					.setValue(this.plugin.settings.terminalLinkDetection)
+					.onChange(async (value) => {
+						if (value !== "simple" && value !== "upstream") return;
+						this.plugin.settings.terminalLinkDetection = value;
 						await this.plugin.saveSettings();
 					})
 			);
