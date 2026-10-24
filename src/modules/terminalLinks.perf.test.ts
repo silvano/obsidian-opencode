@@ -30,7 +30,7 @@ function wrappedScreen(rows: number, cols: number): Terminal {
 }
 
 // Upstream bug: one pointer-move lookup on such a screen takes ~2 s and blocks
-// Obsidian. Fails until upstream fixes it; run with OBSIDIAN_OPENCODE_LINK_PERF=1.
+// Obsidian (https://github.com/kriss-spy/obsidian-opencode/issues/70). Fails until upstream fixes it; run with OBSIDIAN_OPENCODE_LINK_PERF=1.
 // The fork defaults to simple links (README).
 it.runIf(process.env.OBSIDIAN_OPENCODE_LINK_PERF)("looks up links on a fully wrapped OpenCode screen within one frame budget", () => {
 	const links = new TerminalLinks(wrappedScreen(81, 109), {

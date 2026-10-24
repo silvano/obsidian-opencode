@@ -9,7 +9,7 @@ export interface OpencodePluginSettings {
 	newSessionArgs: string;
 	shiftEnterNewline: boolean;
 	// Upstream's detection also links vault notes and wrapped TUI paths, but
-	// can block Obsidian for seconds on pointer moves (see README).
+	// can block Obsidian for seconds on pointer moves (upstream issue #70).
 	terminalLinkDetection: TerminalLinkDetection;
 }
 

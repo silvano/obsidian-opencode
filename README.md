@@ -15,7 +15,7 @@ For features, usage, settings, platform support and known issues, see the [upstr
 - **Escape key works on Windows:** Esc reaches OpenCode again (closing dialogs, interrupting a running prompt); ConPTY otherwise holds a lone Esc after the color replies above.
 - **Clicking `esc` in OpenCode pickers closes them on Windows:** A click on the picker header no longer types the header text into the search field.
 - **Editor server restricted to localhost:** The WebSocket server that sends dropped files to OpenCode listens on `127.0.0.1` only (upstream listens on all network interfaces) and rejects browser connections, so other machines and web pages can't connect.
-- **Simple terminal link detection by default:** Upstream's terminal link detection (vault notes, wrapped paths) can freeze Obsidian for seconds while the mouse moves over the terminal. The fork defaults to the simpler detection it used before: http(s) links open with Ctrl+click (Cmd+click on macOS). Switch back under **Settings → Terminal link detection**; the change applies to newly opened terminals.
+- **Simple terminal link detection by default:** Upstream's terminal link detection (vault notes, wrapped paths) can freeze Obsidian for seconds while the mouse moves over the terminal ([upstream #70](https://github.com/kriss-spy/obsidian-opencode/issues/70)). The fork defaults to the simpler detection it used before: http(s) links open with Ctrl+click (Cmd+click on macOS). Switch back under **Settings → Terminal link detection**; the change applies to newly opened terminals.
 - **Distribution via GitHub Releases and BRAT:** Tag pushes publish releases, gated on the full test suite. The e2e tests derive the plugin id from `manifest.json`.
 
 ## Installation (via BRAT)
